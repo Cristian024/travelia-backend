@@ -3,6 +3,7 @@ import logging
 import asyncpg
 
 from app.config import get_settings
+from app.core.db_logging import LoggedPool
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ async def connect_db() -> None:
         env, settings.db_min_size, settings.db_max_size,
     )
     try:
-        _pool = await asyncpg.create_pool(
+        pool = await asyncpg.create_pool(
             dsn=dsn,
             min_size=settings.db_min_size,
             max_size=settings.db_max_size,
@@ -38,6 +39,14 @@ async def connect_db() -> None:
     except Exception:
         logger.exception("Fallo al conectar a PostgreSQL (entorno=%s)", env)
         raise
+
+    if settings.log_sql_queries:
+        # Nivel DEBUG en el logger 'sql' para que se emita aunque el root sea INFO.
+        logging.getLogger("sql").setLevel("DEBUG")
+        pool = LoggedPool(pool)
+        logger.info("Logging de queries SQL habilitado (LOG_SQL_QUERIES=true).")
+
+    _pool = pool
     logger.info("Conexión a PostgreSQL establecida.")
 
 

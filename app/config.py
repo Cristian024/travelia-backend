@@ -99,6 +99,9 @@ class Settings(BaseSettings):
     log_max_bytes: int = 5_000_000
     log_backup_count: int = 5
 
+    # Interruptor para registrar las queries SQL (LOG_SQL_QUERIES=true|false).
+    log_sql_queries: bool = False
+
     # Exportación a PDF: ruta al binario wkhtmltopdf.
     # Vacío => autodetección (PATH y ubicaciones típicas de Windows/Linux).
     wkhtmltopdf_path: str = ""

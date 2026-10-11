@@ -1,8 +1,10 @@
+from datetime import datetime
 from typing import Optional
 
 import asyncpg
 
 from app.models.planning import GeneralAnswers, PlanningDocument, QuestionTree
+from app.ports.repositories import PlanningRepositoryPort
 from app.repositories import base
 from app.repositories.base import BaseRepository, new_id
 
@@ -13,7 +15,7 @@ _GENERAL_ANSWER_FIELDS = (
 )
 
 
-class PlanningRepository(BaseRepository[PlanningDocument]):
+class PlanningRepository(BaseRepository[PlanningDocument], PlanningRepositoryPort):
     def __init__(self, pool: asyncpg.Pool) -> None:
         super().__init__(pool, PlanningDocument)
 
@@ -67,6 +69,13 @@ class PlanningRepository(BaseRepository[PlanningDocument]):
                 tree = await base.load_tree(conn, row["tree_id"])
                 documents.append(self._to_document(row, tree))
         return documents
+
+    async def count_by_user_since(self, user_id: str, since: datetime) -> int:
+        return await self._pool.fetchval(
+            "SELECT COUNT(*) FROM plannings WHERE user_id = $1 AND created_at >= $2",
+            user_id,
+            since,
+        )
 
     async def save(self, planning: PlanningDocument) -> bool:
         if not planning.id:
@@ -201,6 +210,9 @@ class PlanningRepository(BaseRepository[PlanningDocument]):
             """
         )
         await self._pool.execute("CREATE INDEX IF NOT EXISTS idx_plannings_user_id ON plannings(user_id)")
+        await self._pool.execute(
+            "CREATE INDEX IF NOT EXISTS idx_plannings_user_created ON plannings(user_id, created_at)"
+        )
 
     def _to_document(self, row: asyncpg.Record, tree: QuestionTree) -> PlanningDocument:
         data = dict(row)

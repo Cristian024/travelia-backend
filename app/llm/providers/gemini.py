@@ -12,7 +12,8 @@ class GeminiProvider(LLMProvider):
                 "El paquete 'google-genai' no está instalado. "
                 "Ejecuta: pip install google-genai"
             )
-        print(f"Gemini API Key: {api_key}")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY no está configurada en el .env")
         self._client = Client(api_key=api_key)
         self._model = model
 

@@ -1,7 +1,9 @@
-from datetime import datetime, date
+from app.models.user import LLMOperationType
+from datetime import date, datetime
+
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError
-from app.llm.client import LLMClient
 from app.llm.decision_tree import DecisionTreeManager
+from app.llm.router import LLMRouter
 from app.models.planning import (
     GeneralAnswers,
     PlanningDocument,
@@ -9,7 +11,7 @@ from app.models.planning import (
     QuestionAnswer,
     QuestionTree,
 )
-from app.repositories.planning_repository import PlanningRepository
+from app.ports.repositories import PlanningRepositoryPort, UserRepositoryPort
 from app.schemas.planning import (
     AnswerQuestionsRequest,
     CreatePlanningRequest,
@@ -17,23 +19,50 @@ from app.schemas.planning import (
     PlanningResponse,
     QuestionTreeResponse,
 )
+from app.services.subscription_policy import SubscriptionPolicy
 
 MIN_DEPTH_TO_GENERATE = 1  # user must answer at least one round of dynamic questions
 
 
 class PlanningService:
-    def __init__(self, planning_repo: PlanningRepository, llm: LLMClient) -> None:
+    def __init__(
+        self,
+        planning_repo: PlanningRepositoryPort,
+        user_repo: UserRepositoryPort,
+        llm_router: LLMRouter,
+        policy: SubscriptionPolicy | None = None,
+    ) -> None:
         self._repo = planning_repo
-        self._llm = llm
+        self._user_repo = user_repo
+        self._llm_router = llm_router
+        self._policy = policy or SubscriptionPolicy()
         self._tree_mgr = DecisionTreeManager()
 
     async def create_planning(self, user_id: str, request: CreatePlanningRequest) -> PlanningResponse:
+        user = await self._user_repo.find_by_id(user_id)
+        if not user:
+            raise NotFoundError("User")
+        limits = self._policy.limits_for(user.subscription_type)
+
         arrival = date.fromisoformat(request.arrival_date)
         departure = date.fromisoformat(request.departure_date)
         if departure <= arrival:
             raise BusinessRuleError("departure_date must be after arrival_date")
 
         total_days = (departure - arrival).days
+        if total_days > limits.max_total_days:
+            raise BusinessRuleError(
+                f"Your {limits.subscription_type.value} plan allows up to "
+                f"{limits.max_total_days} days. Upgrade to Premium for longer trips."
+            )
+
+        if limits.monthly_planning_limit is not None:
+            used = await self._repo.count_by_user_since(user_id, _start_of_month())
+            if used >= limits.monthly_planning_limit:
+                raise BusinessRuleError(
+                    f"Monthly limit reached ({limits.monthly_planning_limit} complete "
+                    "plannings). Upgrade to Premium for unlimited planning."
+                )
 
         general = GeneralAnswers(
             destination_country=request.destination_country,
@@ -49,7 +78,13 @@ class PlanningService:
         )
 
         context = self._tree_mgr.build_context_summary(general, QuestionTree(), "")
-        questions = self._llm.generate_dynamic_questions(context, depth=0)
+        llm = self._llm_router.client_for(user.subscription_type, LLMOperationType.itinerary)
+        questions = llm.generate_dynamic_questions(
+            context,
+            depth=0,
+            max_questions=limits.questions_per_round,
+            is_premium=limits.is_premium,
+        )
         tree, root_node = self._tree_mgr.create_root_node(questions)
 
         planning = PlanningDocument(
@@ -92,15 +127,32 @@ class PlanningService:
         planning_id: str,
         request: AnswerQuestionsRequest,
     ) -> CurrentQuestionsResponse:
+        user = await self._user_repo.find_by_id(user_id)
+        if not user:
+            raise NotFoundError("User")
+        limits = self._policy.limits_for(user.subscription_type)
+
         planning = await self._get_owned(user_id, planning_id)
         _assert_in_progress(planning)
+
+        if self._tree_mgr.depth_limit_reached(planning.tree, request.node_id, limits.max_question_depth):
+            raise BusinessRuleError(
+                "Your plan allows a short questionnaire. "
+                "Upgrade to Premium for deeper, niche personalization."
+            )
 
         self._tree_mgr.answer_node(planning.tree, request.node_id, request.answers)
 
         context = self._tree_mgr.build_context_summary(
             planning.general_answers, planning.tree, request.node_id
         )
-        questions = self._llm.generate_dynamic_questions(context, depth=planning.tree.nodes[request.node_id].depth + 1)
+        llm = self._llm_router.client_for(user.subscription_type, LLMOperationType.questions)
+        questions = llm.generate_dynamic_questions(
+            context,
+            depth=planning.tree.nodes[request.node_id].depth + 1,
+            max_questions=limits.questions_per_round,
+            is_premium=limits.is_premium,
+        )
 
         child = self._tree_mgr.append_child_node(planning.tree, request.node_id, questions)
         planning.updated_at = datetime.utcnow()
@@ -140,6 +192,11 @@ class PlanningService:
         if planning.user_id != user_id:
             raise ForbiddenError()
         return planning
+
+
+def _start_of_month() -> datetime:
+    now = datetime.utcnow()
+    return datetime(now.year, now.month, 1)
 
 
 def _assert_in_progress(planning: PlanningDocument) -> None:

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 import asyncpg
@@ -10,16 +11,18 @@ from app.models.itinerary import (
     ReplacementStatus,
 )
 from app.models.planning import QuestionTree
+from app.ports.repositories import ItineraryRepositoryPort
 from app.repositories import base
 from app.repositories.base import BaseRepository, new_id
 
 _DESTINATION_COLUMNS = (
     "destination_id", "position", "name", "country", "city", "days_allocated",
-    "description", "transportation", "estimated_cost", "replacement_status", "replacement_tree_id",
+    "description", "transportation", "estimated_cost", "google_maps_url",
+    "replacement_status", "replacement_tree_id",
 )
 
 
-class ItineraryRepository(BaseRepository[ItineraryDocument]):
+class ItineraryRepository(BaseRepository[ItineraryDocument], ItineraryRepositoryPort):
     def __init__(self, pool: asyncpg.Pool) -> None:
         super().__init__(pool, ItineraryDocument)
 
@@ -31,14 +34,15 @@ class ItineraryRepository(BaseRepository[ItineraryDocument]):
                     """
                     INSERT INTO itineraries (
                         id, user_id, planning_id, title, summary, arrival_date,
-                        departure_date, total_days, status, created_at, updated_at
+                        departure_date, total_days, status, is_public, created_at, updated_at
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                     """,
                     itinerary_id, itinerary.user_id, itinerary.planning_id,
                     itinerary.title, itinerary.summary, itinerary.arrival_date,
                     itinerary.departure_date, itinerary.total_days,
-                    itinerary.status.value, itinerary.created_at, itinerary.updated_at,
+                    itinerary.status.value, itinerary.is_public,
+                    itinerary.created_at, itinerary.updated_at,
                 )
                 await self._insert_destinations(conn, itinerary_id, itinerary.destinations)
         return itinerary_id
@@ -75,6 +79,42 @@ class ItineraryRepository(BaseRepository[ItineraryDocument]):
                 documents.append(self._to_document(row, destinations))
         return documents
 
+    async def find_public(self, user_id: str, limit: int, offset: int) -> list[ItineraryDocument]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT * FROM itineraries
+                WHERE is_public = TRUE AND user_id != $1
+                ORDER BY created_at DESC
+                LIMIT $2 OFFSET $3
+                """,
+                user_id,
+                limit,
+                offset,
+            )
+            documents = []
+            for row in rows:
+                destinations = await self._load_destinations(
+                    conn, row["id"], include_trees=False
+                )
+                documents.append(self._to_document(row, destinations))
+        return documents
+
+    async def count_public(self, user_id: str) -> int:
+        return await self._pool.fetchval(
+            "SELECT COUNT(*) FROM itineraries WHERE is_public = TRUE AND user_id != $1",
+            user_id,
+        )
+
+    async def set_public(self, itinerary_id: str, is_public: bool) -> bool:
+        result = await self._pool.execute(
+            "UPDATE itineraries SET is_public = $2, updated_at = $3 WHERE id = $1",
+            itinerary_id,
+            is_public,
+            datetime.utcnow(),
+        )
+        return result.split()[-1] != "0"
+
     async def save(self, itinerary: ItineraryDocument) -> bool:
         if not itinerary.id:
             raise ValueError("Itinerary has no id")
@@ -92,19 +132,37 @@ class ItineraryRepository(BaseRepository[ItineraryDocument]):
                     UPDATE itineraries SET
                         user_id = $2, planning_id = $3, title = $4, summary = $5,
                         arrival_date = $6, departure_date = $7, total_days = $8,
-                        status = $9, created_at = $10, updated_at = $11
+                        status = $9, is_public = $10, created_at = $11, updated_at = $12
                     WHERE id = $1
                     """,
                     itinerary.id, itinerary.user_id, itinerary.planning_id,
                     itinerary.title, itinerary.summary, itinerary.arrival_date,
                     itinerary.departure_date, itinerary.total_days,
-                    itinerary.status.value, itinerary.created_at, itinerary.updated_at,
+                    itinerary.status.value, itinerary.is_public,
+                    itinerary.created_at, itinerary.updated_at,
                 )
                 if result.split()[-1] == "0":
                     return False
                 await conn.execute("DELETE FROM destinations WHERE itinerary_id = $1", itinerary.id)
                 new_tree_ids = await self._insert_destinations(conn, itinerary.id, itinerary.destinations)
                 for tree_id in removed_tree_ids - new_tree_ids:
+                    await base.delete_tree(conn, tree_id)
+        return True
+
+    async def delete(self, itinerary_id: str) -> bool:
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                tree_rows = await conn.fetch(
+                    "SELECT replacement_tree_id FROM destinations WHERE itinerary_id = $1",
+                    itinerary_id,
+                )
+                tree_ids = {
+                    r["replacement_tree_id"] for r in tree_rows if r["replacement_tree_id"]
+                }
+                result = await conn.execute("DELETE FROM itineraries WHERE id = $1", itinerary_id)
+                if result.split()[-1] == "0":
+                    return False
+                for tree_id in tree_ids:
                     await base.delete_tree(conn, tree_id)
         return True
 
@@ -121,12 +179,14 @@ class ItineraryRepository(BaseRepository[ItineraryDocument]):
                 departure_date TEXT NOT NULL,
                 total_days INTEGER NOT NULL,
                 status TEXT NOT NULL,
+                is_public BOOLEAN NOT NULL DEFAULT FALSE,
                 created_at TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP NOT NULL
             )
             """,
             "CREATE INDEX IF NOT EXISTS idx_itineraries_user_id ON itineraries(user_id)",
             "CREATE INDEX IF NOT EXISTS idx_itineraries_planning_id ON itineraries(planning_id)",
+            "CREATE INDEX IF NOT EXISTS idx_itineraries_public_created ON itineraries(is_public, created_at DESC)",
             """
             CREATE TABLE IF NOT EXISTS destinations (
                 itinerary_id TEXT NOT NULL REFERENCES itineraries(id) ON DELETE CASCADE,
@@ -139,6 +199,7 @@ class ItineraryRepository(BaseRepository[ItineraryDocument]):
                 description TEXT NOT NULL,
                 transportation TEXT NOT NULL DEFAULT '',
                 estimated_cost TEXT,
+                google_maps_url TEXT,
                 replacement_status TEXT NOT NULL DEFAULT 'none',
                 replacement_tree_id TEXT REFERENCES question_trees(id),
                 PRIMARY KEY (itinerary_id, destination_id)
@@ -204,13 +265,14 @@ class ItineraryRepository(BaseRepository[ItineraryDocument]):
                 INSERT INTO destinations (
                     itinerary_id, destination_id, position, name, country, city,
                     days_allocated, description, transportation, estimated_cost,
-                    replacement_status, replacement_tree_id
+                    google_maps_url, replacement_status, replacement_tree_id
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 """,
                 itinerary_id, dest.destination_id, dest.order, dest.name, dest.country,
                 dest.city, dest.days_allocated, dest.description, dest.transportation,
-                dest.estimated_cost, dest.replacement.status.value, replacement_tree_id,
+                dest.estimated_cost, dest.google_maps_url,
+                dest.replacement.status.value, replacement_tree_id,
             )
             for pos, highlight in enumerate(dest.highlights):
                 await conn.execute(
@@ -292,26 +354,36 @@ class ItineraryRepository(BaseRepository[ItineraryDocument]):
             tree = QuestionTree()
             if include_trees and row["replacement_tree_id"]:
                 tree = await base.load_tree(conn, row["replacement_tree_id"])
-            destinations.append(
-                Destination(
-                    destination_id=row["destination_id"],
-                    order=row["position"],
-                    name=row["name"],
-                    country=row["country"],
-                    city=row["city"],
-                    days_allocated=row["days_allocated"],
-                    description=row["description"],
-                    highlights=highlights_by_dest.get(row["destination_id"], []),
-                    accommodation_suggestions=accommodations_by_dest.get(row["destination_id"], []),
-                    transportation=row["transportation"],
-                    estimated_cost=row["estimated_cost"],
-                    activities=activities_by_dest.get(row["destination_id"], []),
-                    replacement=DestinationReplacement(
-                        status=ReplacementStatus(row["replacement_status"]),
-                        tree=tree,
-                    ),
-                )
+            dest = Destination(
+                destination_id=row["destination_id"],
+                order=row["position"],
+                name=row["name"],
+                country=row["country"],
+                city=row["city"],
+                days_allocated=row["days_allocated"],
+                description=row["description"],
+                highlights=highlights_by_dest.get(row["destination_id"], []),
+                accommodation_suggestions=accommodations_by_dest.get(row["destination_id"], []),
+                transportation=row["transportation"],
+                estimated_cost=row["estimated_cost"],
+                google_maps_url=row["google_maps_url"],
+                activities=activities_by_dest.get(row["destination_id"], []),
+                replacement=DestinationReplacement(
+                    status=ReplacementStatus(row["replacement_status"]),
+                    tree=tree,
+                ),
             )
+            # Backfill: si el destino no tenía URL guardada, el modelo la generó;
+            # la persistimos para no recalcularla en cada carga.
+            if not row["google_maps_url"] and dest.google_maps_url:
+                await conn.execute(
+                    """
+                    UPDATE destinations SET google_maps_url = $3
+                    WHERE itinerary_id = $1 AND destination_id = $2
+                    """,
+                    itinerary_id, dest.destination_id, dest.google_maps_url,
+                )
+            destinations.append(dest)
         return destinations
 
     def _to_document(

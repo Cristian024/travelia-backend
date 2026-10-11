@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body { font-family: Helvetica, Arial, sans-serif; color: #1f2933; font-size: 12px; }
+    h1 { color: #0b7285; margin-bottom: 4px; }
+    h2 { color: #0b7285; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 22px; }
+    .meta { color: #52606d; margin-bottom: 16px; }
+    .card { border: 1px solid #e1e7ec; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+    .badge { background: #0b7285; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+    ul { margin: 6px 0 6px 18px; }
+    .muted { color: #7b8794; }
+    a { color: #1098ad; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <h1>{{ itinerary.title }}</h1>
+  <div class="meta">
+    {{ itinerary.arrival_date }} → {{ itinerary.departure_date }}
+    · {{ itinerary.total_days }} días
+    · {{ itinerary.destinations | length }} destino(s)
+  </div>
+  <p>{{ itinerary.summary }}</p>
+
+  {% for dest in itinerary.destinations %}
+  <div class="card">
+    <h3>{{ dest.order }}. {{ dest.name }} <span class="muted">({{ dest.city }}, {{ dest.country }})</span></h3>
+    <span class="badge">{{ dest.days_allocated }} días</span>
+    {% if dest.estimated_cost %}<span class="badge">Presupuesto: {{ dest.estimated_cost }}</span>{% endif %}
+    <p>{{ dest.description }}</p>
+
+    {% if dest.highlights %}
+    <strong>Imperdibles</strong>
+    <ul>{% for h in dest.highlights %}<li>{{ h }}</li>{% endfor %}</ul>
+    {% endif %}
+
+    {% if dest.activities %}
+    <strong>Actividades</strong>
+    <ul>
+      {% for a in dest.activities %}
+      <li>{{ a.name }} <span class="muted">({{ a.duration_hours }}h, {{ a.category }})</span>{% if a.estimated_cost %} — {{ a.estimated_cost }}{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if dest.transportation %}<p class="muted">Transporte: {{ dest.transportation }}</p>{% endif %}
+    {% if dest.google_maps_url %}<p><a href="{{ dest.google_maps_url }}">Ver ruta en Google Maps</a></p>{% endif %}
+  </div>
+  {% endfor %}
+
+  <p class="muted">Generado por Travelia.</p>
+</body>
+</html>

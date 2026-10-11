@@ -9,6 +9,7 @@ from app.models.itinerary import (
     ReplacementStatus,
 )
 from app.models.planning import DynamicQuestion, QuestionAnswer
+from app.models.weather import WeatherForecast
 from app.schemas.planning import QuestionTreeResponse
 
 
@@ -52,6 +53,7 @@ class DestinationResponse(BaseModel):
     transportation: str
     estimated_cost: Optional[str]
     activities: list[ActivityResponse]
+    google_maps_url: Optional[str] = None
     replacement: DestinationReplacementResponse
 
     @classmethod
@@ -69,6 +71,7 @@ class DestinationResponse(BaseModel):
             transportation=d.transportation,
             estimated_cost=d.estimated_cost,
             activities=[ActivityResponse.from_domain(a) for a in d.activities],
+            google_maps_url=d.google_maps_url,
             replacement=DestinationReplacementResponse.from_domain(d.replacement),
         )
 
@@ -84,6 +87,8 @@ class ItineraryResponse(BaseModel):
     total_days: int
     destinations: list[DestinationResponse]
     status: ItineraryStatus
+    is_public: bool = False
+    weather: Optional[WeatherForecast] = None
     created_at: datetime
     updated_at: datetime
 
@@ -98,6 +103,7 @@ class ItinerarySummaryResponse(BaseModel):
     total_days: int
     destination_count: int
     status: ItineraryStatus
+    is_public: bool = False
     created_at: datetime
 
 
@@ -113,3 +119,15 @@ class DestinationQuestionsResponse(BaseModel):
 class AnswerReplacementRequest(BaseModel):
     node_id: str
     answers: list[QuestionAnswer]
+
+
+class SetVisibilityRequest(BaseModel):
+    is_public: bool
+
+
+class PublicFeedResponse(BaseModel):
+    items: list[ItinerarySummaryResponse]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int

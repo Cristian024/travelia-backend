@@ -6,7 +6,9 @@ from app.api.v1.router import api_router
 from app.config import get_settings
 from app.core.database import close_db, connect_db, get_database
 from app.core.exceptions import register_exception_handlers
+from app.repositories.expense_repository import ExpenseRepository
 from app.repositories.itinerary_repository import ItineraryRepository
+from app.repositories.packing_repository import PackingListRepository
 from app.repositories.planning_repository import PlanningRepository
 from app.repositories.user_repository import UserRepository
 
@@ -20,6 +22,8 @@ async def lifespan(app: FastAPI):
     await UserRepository(db).create_indexes()
     await PlanningRepository(db).create_indexes()
     await ItineraryRepository(db).create_indexes()
+    await ExpenseRepository(db).create_indexes()
+    await PackingListRepository(db).create_indexes()
     yield
     await close_db()
 

@@ -1,5 +1,7 @@
+from typing import Optional
+
 from app.models.planning import GeneralAnswers
-from app.models.itinerary import Destination
+from app.models.itinerary import Destination, ItineraryDocument
 
 SYSTEM_TRAVEL_PLANNER = """\
 Eres Travelia, un asistente experto en planificación de viajes personalizados. \
@@ -9,8 +11,24 @@ Siempre respondes en español y en formato JSON válido cuando se te solicita.\
 """
 
 
-def build_dynamic_questions_prompt(context_summary: str, depth: int) -> str:
-    max_questions = 5 if depth < 2 else 4
+def build_dynamic_questions_prompt(
+    context_summary: str,
+    depth: int,
+    max_questions: Optional[int] = None,
+    is_premium: bool = False,
+) -> str:
+    if max_questions is None:
+        max_questions = 5 if depth < 2 else 4
+
+    depth_guidance = (
+        "Proporciona un cuestionario EXTENSO y de nicho: profundiza en ramas "
+        "específicas, intereses particulares, ritmo de viaje y experiencias "
+        "auténticas/ocultas."
+        if is_premium
+        else "Proporciona un cuestionario CORTO y esencial: solo las preguntas "
+        "clave para poder armar un buen itinerario sin abrumar al usuario."
+    )
+
     return f"""\
 {context_summary}
 
@@ -18,6 +36,7 @@ Con base en toda la información anterior, genera {max_questions} preguntas din�
 y personalizadas para refinar aún más el plan de viaje del usuario. \
 Las preguntas deben profundizar en aspectos que aún no han sido cubiertos y que \
 son relevantes dado el destino, propósito y preferencias ya indicados.
+{depth_guidance}
 
 Responde ÚNICAMENTE con un JSON con esta estructura exacta (sin texto adicional):
 {{
@@ -42,7 +61,18 @@ Reglas:
 """
 
 
-def build_generate_itinerary_prompt(context_summary: str, general: GeneralAnswers) -> str:
+def build_generate_itinerary_prompt(
+    context_summary: str,
+    general: GeneralAnswers,
+    max_destinations: int = 5,
+    is_premium: bool = False,
+) -> str:
+    multi_destination_rule = (
+        "Si el itinerario lo justifica, puedes combinar varios destinos/pases "
+        "(multidestino) de forma coherente."
+        if is_premium
+        else "Prioriza un único destino o una ruta corta y concentrada."
+    )
     return f"""\
 {context_summary}
 
@@ -85,7 +115,8 @@ Responde ÚNICAMENTE con un JSON con esta estructura exacta (sin texto adicional
 
 Reglas:
 - La suma de days_allocated de todos los destinos debe ser exactamente {general.total_days}
-- Incluye entre 2 y 5 destinos según la duración del viaje
+- Incluye entre 1 y {max_destinations} destinos según la duración del viaje
+- {multi_destination_rule}
 - Incluye 2-4 actividades por destino
 - Asegúrate de que todo sea relevante para el propósito y presupuesto del viajero
 - Si viajan niños, incluye actividades familiares apropiadas\
@@ -164,4 +195,47 @@ Responde ÚNICAMENTE con un JSON con esta estructura exacta (sin texto adicional
     }}
   ]
 }}\
+"""
+
+
+def build_packing_list_prompt(
+    itinerary: ItineraryDocument,
+    weather_summary: str = "",
+    is_premium: bool = False,
+) -> str:
+    destinations = ", ".join(
+        f"{d.name} ({d.city}, {d.country})" for d in itinerary.destinations
+    ) or "destino desconocido"
+    scope = (
+        "Genera una lista exhaustiva, incluyendo categorías de nicho y equipo "
+        "especializado."
+        if is_premium
+        else "Genera una lista práctica y esencial, sin excesos."
+    )
+    return f"""\
+=== VIAJE ===
+Título: {itinerary.title}
+Fechas: {itinerary.arrival_date} → {itinerary.departure_date} ({itinerary.total_days} días)
+Destino(s): {destinations}
+Resumen: {itinerary.summary}
+
+=== CLIMA PRONOSTICADO ===
+{weather_summary or "Sin datos de clima disponibles; infiere el clima típico por destino y fechas."}
+
+Genera una lista de equipaje (packing list) personalizada para este viaje, \
+basada en el destino, las fechas (clima inferido) y el propósito del viaje. \
+{scope}
+
+Responde ÚNICAMENTE con un JSON con esta estructura exacta (sin texto adicional):
+{{
+  "notes": "Consejos breves de equipaje (1-2 oraciones)",
+  "items": [
+    {{
+      "category": "documentos|ropa|calzado|higiene|tecnología|salud|accesorios|otros",
+      "item": "Nombre del elemento",
+      "quantity": "ej: 3, 1 par, opcional",
+      "reason": "Por qué es necesario (clima, actividad, etc.)"
+    }}
+  ]
+}}
 """

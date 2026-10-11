@@ -5,15 +5,23 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.config import get_settings
 from app.core.database import get_database
 from app.core.security import decode_token
+from app.adapters.pdf_exporter import PdfKitItineraryExporter
+from app.adapters.weather_openweather import OpenWeatherMapProvider
 from app.llm.client import LLMClient
 from app.llm.factory import LLMProviderFactory
 from app.llm.interfaces import LLMProvider
+from app.llm.router import LLMRouter
+from app.repositories.expense_repository import ExpenseRepository
 from app.repositories.itinerary_repository import ItineraryRepository
+from app.repositories.packing_repository import PackingListRepository
 from app.repositories.planning_repository import PlanningRepository
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
+from app.services.expense_service import ExpenseService
 from app.services.itinerary_service import ItineraryService
+from app.services.packing_service import PackingListService
 from app.services.planning_service import PlanningService
+from app.services.subscription_service import SubscriptionService
 from app.services.user_service import UserService
 
 _bearer = HTTPBearer()
@@ -29,6 +37,12 @@ def get_planning_repo() -> PlanningRepository:
 
 def get_itinerary_repo() -> ItineraryRepository:
     return ItineraryRepository(get_database())
+
+def get_expense_repo() -> ExpenseRepository:
+    return ExpenseRepository(get_database())
+
+def get_packing_repo() -> PackingListRepository:
+    return PackingListRepository(get_database())
 
 # --- LLM provider & client ---
 
@@ -83,6 +97,24 @@ def get_llm_client(provider_name: str | None = None):
     return _dependency
 
 
+def get_llm_router() -> LLMRouter:
+    """Router que elige el modelo LLM según la suscripción del usuario."""
+    return LLMRouter(_settings)
+
+
+# --- External adapters ---
+
+def get_weather_provider() -> OpenWeatherMapProvider:
+    return OpenWeatherMapProvider(
+        api_key=_settings.openweather_api_key,
+        base_url=_settings.openweather_base_url,
+    )
+
+
+def get_itinerary_exporter() -> PdfKitItineraryExporter:
+    return PdfKitItineraryExporter(wkhtmltopdf_path=_settings.wkhtmltopdf_path or None)
+
+
 # --- Service factories ---
 
 def get_auth_service(repo: Annotated[UserRepository, Depends(get_user_repo)]) -> AuthService:
@@ -93,16 +125,41 @@ def get_user_service(repo: Annotated[UserRepository, Depends(get_user_repo)]) ->
 
 def get_planning_service(
     repo: Annotated[PlanningRepository, Depends(get_planning_repo)],
-    llm: Annotated[LLMClient, Depends(get_llm_client("groq"))],
+    user_repo: Annotated[UserRepository, Depends(get_user_repo)],
+    llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
 ) -> PlanningService:
-    return PlanningService(repo, llm)
+    return PlanningService(repo, user_repo, llm_router)
 
 def get_itinerary_service(
     i_repo: Annotated[ItineraryRepository, Depends(get_itinerary_repo)],
     p_repo: Annotated[PlanningRepository, Depends(get_planning_repo)],
-    llm: Annotated[LLMClient, Depends(get_llm_client("gemini"))],
+    user_repo: Annotated[UserRepository, Depends(get_user_repo)],
+    llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
+    weather: Annotated[OpenWeatherMapProvider, Depends(get_weather_provider)],
+    exporter: Annotated[PdfKitItineraryExporter, Depends(get_itinerary_exporter)],
 ) -> ItineraryService:
-    return ItineraryService(i_repo, p_repo, llm)
+    return ItineraryService(i_repo, p_repo, user_repo, llm_router, weather, exporter)
+
+def get_expense_service(
+    expense_repo: Annotated[ExpenseRepository, Depends(get_expense_repo)],
+    itinerary_repo: Annotated[ItineraryRepository, Depends(get_itinerary_repo)],
+) -> ExpenseService:
+    return ExpenseService(expense_repo, itinerary_repo)
+
+def get_packing_service(
+    itinerary_repo: Annotated[ItineraryRepository, Depends(get_itinerary_repo)],
+    user_repo: Annotated[UserRepository, Depends(get_user_repo)],
+    packing_repo: Annotated[PackingListRepository, Depends(get_packing_repo)],
+    llm_router: Annotated[LLMRouter, Depends(get_llm_router)],
+    weather: Annotated[OpenWeatherMapProvider, Depends(get_weather_provider)],
+) -> PackingListService:
+    return PackingListService(itinerary_repo, user_repo, packing_repo, llm_router, weather)
+
+def get_subscription_service(
+    user_repo: Annotated[UserRepository, Depends(get_user_repo)],
+    planning_repo: Annotated[PlanningRepository, Depends(get_planning_repo)],
+) -> SubscriptionService:
+    return SubscriptionService(user_repo, planning_repo)
 
 # --- Auth dependency ---
 

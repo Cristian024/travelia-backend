@@ -3,11 +3,12 @@ from typing import Optional
 import asyncpg
 
 from app.models.user import UserDocument
+from app.ports.repositories import UserRepositoryPort
 from app.repositories.base import BaseRepository, new_id
 
 _COLUMNS = (
     "id, email, hashed_password, full_name, birth_date, country_of_residence,"
-    " phone, preferred_language, created_at, updated_at"
+    " phone, preferred_language, subscription_type, premium_since, created_at, updated_at"
 )
 
 _UPDATABLE_COLUMNS = {
@@ -18,11 +19,13 @@ _UPDATABLE_COLUMNS = {
     "country_of_residence",
     "phone",
     "preferred_language",
+    "subscription_type",
+    "premium_since",
     "updated_at",
 }
 
 
-class UserRepository(BaseRepository[UserDocument]):
+class UserRepository(BaseRepository[UserDocument], UserRepositoryPort):
     def __init__(self, pool: asyncpg.Pool) -> None:
         super().__init__(pool, UserDocument)
 
@@ -43,11 +46,12 @@ class UserRepository(BaseRepository[UserDocument]):
             """
             INSERT INTO users (id, email, hashed_password, full_name, birth_date,
                                country_of_residence, phone, preferred_language,
-                               created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                               subscription_type, premium_since, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             """,
             user_id, user.email, user.hashed_password, user.full_name, user.birth_date,
             user.country_of_residence, user.phone, user.preferred_language,
+            user.subscription_type.value, user.premium_since,
             user.created_at, user.updated_at,
         )
         return user_id
@@ -75,10 +79,16 @@ class UserRepository(BaseRepository[UserDocument]):
                 country_of_residence TEXT NOT NULL,
                 phone TEXT,
                 preferred_language TEXT NOT NULL DEFAULT 'es',
+                subscription_type TEXT NOT NULL DEFAULT 'FREE'
+                    CHECK (subscription_type IN ('FREE', 'PREMIUM')),
+                premium_since TIMESTAMP,
                 created_at TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP NOT NULL
             )
             """
+        )
+        await self._pool.execute(
+            "CREATE INDEX IF NOT EXISTS idx_users_subscription_type ON users(subscription_type)"
         )
 
     def _to_model(self, row: Optional[asyncpg.Record]) -> Optional[UserDocument]:

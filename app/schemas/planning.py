@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from app.models.planning import (
     BudgetRange,
     DynamicQuestion,
@@ -98,6 +98,22 @@ class CreatePlanningRequest(BaseModel):
         except ValueError:
             raise ValueError("Date must be in YYYY-MM-DD format")
         return v
+
+    @model_validator(mode="after")
+    def validate_duration(self) -> "CreatePlanningRequest":
+        from datetime import date
+
+        arrival = date.fromisoformat(self.arrival_date)
+        departure = date.fromisoformat(self.departure_date)
+        if departure <= arrival:
+            raise ValueError("departure_date must be after arrival_date")
+
+        total_days = (departure - arrival).days
+        # Tope absoluto (plan PREMIUM). El límite de 4 días para FREE se aplica
+        # en PlanningService conociendo la suscripción del usuario.
+        if total_days > 30:
+            raise ValueError("total_days cannot exceed 30 days")
+        return self
 
 
 class AnswerQuestionsRequest(BaseModel):

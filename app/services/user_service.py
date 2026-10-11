@@ -1,12 +1,12 @@
 from datetime import datetime
 from app.core.exceptions import NotFoundError
 from app.models.user import UserDocument
-from app.repositories.user_repository import UserRepository
+from app.ports.repositories import UserRepositoryPort
 from app.schemas.user import UpdateUserRequest, UserResponse
 
 
 class UserService:
-    def __init__(self, user_repo: UserRepository) -> None:
+    def __init__(self, user_repo: UserRepositoryPort) -> None:
         self._repo = user_repo
 
     async def get_profile(self, user_id: str) -> UserResponse:

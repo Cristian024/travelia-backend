@@ -66,6 +66,16 @@ class DecisionTreeManager:
         return child
 
     @staticmethod
+    def depth_limit_reached(tree: QuestionTree, node_id: str, max_depth: int) -> bool:
+        """
+        Devuelve True si el nodo indicado alcanzó el límite de profundidad
+        permitido por el plan del usuario (árbol corto para FREE, profundo
+        para PREMIUM).
+        """
+        node = tree.nodes.get(node_id)
+        return node is not None and node.depth >= max_depth
+
+    @staticmethod
     def build_context_summary(
         general_answers: GeneralAnswers,
         tree: QuestionTree,

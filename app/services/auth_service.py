@@ -7,12 +7,12 @@ from app.core.security import (
     verify_password,
 )
 from app.models.user import UserDocument
-from app.repositories.user_repository import UserRepository
+from app.ports.repositories import UserRepositoryPort
 from app.schemas.user import LoginRequest, RegisterRequest, TokenResponse
 
 
 class AuthService:
-    def __init__(self, user_repo: UserRepository) -> None:
+    def __init__(self, user_repo: UserRepositoryPort) -> None:
         self._repo = user_repo
 
     async def register(self, request: RegisterRequest) -> TokenResponse:

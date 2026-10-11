@@ -7,10 +7,12 @@ from app.llm.prompts import (
     SYSTEM_TRAVEL_PLANNER,
     build_dynamic_questions_prompt,
     build_generate_itinerary_prompt,
+    build_packing_list_prompt,
     build_replacement_destination_prompt,
     build_replacement_questions_prompt,
 )
-from app.models.itinerary import Activity, Destination, DestinationReplacement
+from app.models.itinerary import Activity, Destination, DestinationReplacement, ItineraryDocument
+from app.models.packing import PackingItem, PackingList
 from app.models.planning import DynamicQuestion, GeneralAnswers, QuestionType
 
 
@@ -52,16 +54,58 @@ class LLMClient:
             options=q.get("options") or None,
         )
 
-    def generate_dynamic_questions(self, context_summary: str, depth: int) -> list[DynamicQuestion]:
-        prompt = build_dynamic_questions_prompt(context_summary, depth)
+    def generate_dynamic_questions(
+        self,
+        context_summary: str,
+        depth: int,
+        max_questions: int | None = None,
+        is_premium: bool = False,
+    ) -> list[DynamicQuestion]:
+        prompt = build_dynamic_questions_prompt(
+            context_summary, depth, max_questions=max_questions, is_premium=is_premium
+        )
         raw = self._call(prompt)
         data = self._parse_json(raw)
         return [self._parse_question(q) for q in data["questions"]]
 
-    def generate_itinerary_data(self, context_summary: str, general: GeneralAnswers) -> dict:
-        prompt = build_generate_itinerary_prompt(context_summary, general)
+    def generate_itinerary_data(
+        self,
+        context_summary: str,
+        general: GeneralAnswers,
+        max_destinations: int = 5,
+        is_premium: bool = False,
+    ) -> dict:
+        prompt = build_generate_itinerary_prompt(
+            context_summary, general, max_destinations=max_destinations, is_premium=is_premium
+        )
         raw = self._call(prompt)
         return self._parse_json(raw)
+
+    def generate_packing_list(
+        self,
+        itinerary: ItineraryDocument,
+        weather_summary: str = "",
+        is_premium: bool = False,
+    ) -> PackingList:
+        prompt = build_packing_list_prompt(itinerary, weather_summary, is_premium)
+        raw = self._call(prompt)
+        data = self._parse_json(raw)
+        destinations = ", ".join(d.name for d in itinerary.destinations) or itinerary.title
+        return PackingList(
+            itinerary_id=itinerary.id or "",
+            destination_summary=destinations,
+            weather_summary=weather_summary,
+            notes=data.get("notes", ""),
+            items=[
+                PackingItem(
+                    category=item.get("category", "otros"),
+                    item=item["item"],
+                    quantity=item.get("quantity"),
+                    reason=item.get("reason"),
+                )
+                for item in data.get("items", [])
+            ],
+        )
 
     def generate_replacement_questions(
         self,

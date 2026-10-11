@@ -9,5 +9,11 @@ python-multipart>=0.0.9
 anthropic>=0.34.0
 python-dotenv>=1.0.0
 
+# APIs externas e infraestructura
+httpx>=0.27.0
+jinja2>=3.1.0
+pdfkit>=1.0.0
+
 # Proveedores opcionales (instalar según el LLM_PROVIDER elegido)
 # openai>=1.54.0
+# google-genai>=1.0.0  (requerido para FREE_LLM_PROVIDER=gemini)

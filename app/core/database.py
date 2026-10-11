@@ -1,4 +1,5 @@
 import asyncpg
+
 from app.config import get_settings
 
 settings = get_settings()
@@ -9,13 +10,9 @@ _pool: asyncpg.Pool | None = None
 async def connect_db() -> None:
     global _pool
     _pool = await asyncpg.create_pool(
-        user='postgres', 
-        password='admin123',
-        database='travelia', 
-        host='localhost', 
-        port=5432, 
-        min_size=1, 
-        max_size=10
+        dsn=settings.database_url,
+        min_size=settings.db_min_size,
+        max_size=settings.db_max_size,
     )
 
 

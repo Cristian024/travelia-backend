@@ -1,9 +1,12 @@
+import logging
 from datetime import datetime
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.models.plan import Plan
 from app.ports.repositories import PlanRepositoryPort
 from app.schemas.plan import CreatePlanRequest, PlanResponse, UpdatePlanRequest
+
+logger = logging.getLogger(__name__)
 
 
 class PlanService:
@@ -30,6 +33,7 @@ class PlanService:
         )
         plan_id = await self._repo.upsert(plan)
         created = await self._repo.find_by_id(plan_id)
+        logger.info("Plan creado id=%s code=%s precio=%s", plan_id, plan.code, plan.amount_in_cents)
         return PlanResponse.from_domain(created)
 
     async def update_plan(self, plan_id: str, request: UpdatePlanRequest) -> PlanResponse:
@@ -45,6 +49,7 @@ class PlanService:
         # upsert actualiza la fila existente (misma clave `code`).
         await self._repo.upsert(plan)
         updated = await self._repo.find_by_id(plan_id)
+        logger.info("Plan actualizado id=%s code=%s", plan_id, plan.code)
         return PlanResponse.from_domain(updated)
 
     async def delete_plan(self, plan_id: str) -> None:
@@ -52,3 +57,4 @@ class PlanService:
         if not plan:
             raise NotFoundError("Plan")
         await self._repo.delete(plan_id)
+        logger.info("Plan eliminado id=%s code=%s", plan_id, plan.code)

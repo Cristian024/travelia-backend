@@ -1,5 +1,9 @@
+import logging
+
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 
 class TraveliaException(Exception):
@@ -42,7 +46,23 @@ class PaymentGatewayError(TraveliaException):
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(TraveliaException)
     async def travelia_exception_handler(request: Request, exc: TraveliaException) -> JSONResponse:
+        if exc.status_code >= 500:
+            logger.error(
+                "%s %s -> %s: %s", request.method, request.url.path, exc.status_code, exc.message
+            )
+        else:
+            logger.warning(
+                "%s %s -> %s: %s", request.method, request.url.path, exc.status_code, exc.message
+            )
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.message},
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.exception("Error no manejado en %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"detail": "Internal server error"},
         )

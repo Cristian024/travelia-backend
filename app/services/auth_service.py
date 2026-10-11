@@ -1,3 +1,5 @@
+import logging
+
 from app.core.exceptions import ConflictError, UnauthorizedError
 from app.core.security import (
     create_access_token,
@@ -10,6 +12,8 @@ from app.models.user import UserDocument, UserRole
 from app.ports.repositories import UserRepositoryPort
 from app.schemas.user import LoginRequest, RegisterRequest, TokenResponse
 
+logger = logging.getLogger(__name__)
+
 
 class AuthService:
     def __init__(
@@ -20,6 +24,7 @@ class AuthService:
 
     async def register(self, request: RegisterRequest) -> TokenResponse:
         if await self._repo.email_exists(request.email):
+            logger.warning("Registro rechazado: el correo ya existe (%s)", request.email)
             raise ConflictError("Email already registered")
 
         email = request.email.lower()
@@ -34,6 +39,7 @@ class AuthService:
             role=UserRole.admin if email in self._admin_emails else UserRole.user,
         )
         user_id = await self._repo.insert(user)
+        logger.info("Usuario registrado id=%s rol=%s", user_id, user.role.value)
         return TokenResponse(
             access_token=create_access_token(user_id),
             refresh_token=create_refresh_token(user_id),
@@ -42,8 +48,10 @@ class AuthService:
     async def login(self, request: LoginRequest) -> TokenResponse:
         user = await self._repo.find_by_email(request.email)
         if not user or not verify_password(request.password, user.hashed_password):
+            logger.warning("Login fallido para %s", request.email)
             raise UnauthorizedError("Invalid credentials")
 
+        logger.info("Login exitoso de %s", user.id)
         return TokenResponse(
             access_token=create_access_token(user.id),
             refresh_token=create_refresh_token(user.id),
@@ -53,6 +61,7 @@ class AuthService:
         try:
             payload = decode_token(refresh_token)
         except ValueError:
+            logger.warning("Refresh de token inválido")
             raise UnauthorizedError("Invalid refresh token")
 
         if payload.get("type") != "refresh":

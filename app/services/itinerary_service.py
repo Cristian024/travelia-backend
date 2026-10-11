@@ -1,3 +1,4 @@
+import logging
 from app.models.user import LLMOperationType
 import uuid
 from datetime import datetime
@@ -30,6 +31,8 @@ from app.schemas.itinerary import (
     ItinerarySummaryResponse,
 )
 from app.services.subscription_policy import SubscriptionPolicy
+
+logger = logging.getLogger(__name__)
 
 MIN_REPLACEMENT_DEPTH = 1
 
@@ -97,6 +100,10 @@ class ItineraryService:
         planning.status = PlanningStatus.completed
         planning.updated_at = datetime.utcnow()
         await self._planning_repo.save(planning)
+        logger.info(
+            "Itinerario generado id=%s usuario=%s destinos=%s",
+            itinerary_id, user_id, len(destinations),
+        )
 
         return _to_response(itinerary)
 
@@ -114,6 +121,7 @@ class ItineraryService:
     async def delete_itinerary(self, user_id: str, itinerary_id: str) -> None:
         await self._get_owned(user_id, itinerary_id)
         await self._repo.delete(itinerary_id)
+        logger.info("Itinerario eliminado id=%s usuario=%s", itinerary_id, user_id)
 
     # --- Public feed / cloning ---
 
@@ -123,6 +131,7 @@ class ItineraryService:
         itinerary = await self._get_owned(user_id, itinerary_id)
         await self._repo.set_public(itinerary_id, is_public)
         itinerary.is_public = is_public
+        logger.info("Visibilidad itinerario id=%s is_public=%s", itinerary_id, is_public)
         return _to_response(itinerary)
 
     async def list_public(
@@ -160,13 +169,17 @@ class ItineraryService:
 
         new_id = await self._repo.insert(clone)
         clone.id = new_id
+        logger.info("Itinerario clonado origen=%s nuevo=%s usuario=%s", itinerary_id, new_id, user_id)
         return _to_response(clone)
 
     async def export_pdf(self, user_id: str, itinerary_id: str) -> bytes:
         itinerary = await self._get_owned(user_id, itinerary_id)
         if not self._exporter:
+            logger.error("Exportación PDF no disponible (sin adaptador) para id=%s", itinerary_id)
             raise BusinessRuleError("PDF export is not available")
-        return await self._exporter.to_pdf(itinerary)
+        pdf = await self._exporter.to_pdf(itinerary)
+        logger.info("Itinerario exportado a PDF id=%s bytes=%s", itinerary_id, len(pdf))
+        return pdf
 
     # --- Destination replacement flow ---
 

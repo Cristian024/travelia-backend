@@ -1,9 +1,12 @@
+import logging
 import shutil
 from pathlib import Path
 from typing import Optional
 
 from app.models.itinerary import ItineraryDocument
 from app.ports.external import ItineraryExporterPort
+
+logger = logging.getLogger(__name__)
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -62,10 +65,10 @@ class PdfKitItineraryExporter(ItineraryExporterPort):
         import pdfkit
 
         if not self._wkhtmltopdf_path:
-            raise RuntimeError(
-                "No se encontró el binario 'wkhtmltopdf'."
-            )
+            logger.error("PDF: binario 'wkhtmltopdf' no encontrado; no se puede exportar")
+            raise RuntimeError("No se encontró el binario 'wkhtmltopdf'.")
 
+        logger.info("PDF: generando itinerario id=%s", itinerary.id)
         config = pdfkit.configuration(wkhtmltopdf=self._wkhtmltopdf_path)
         template = self._env.get_template(self._template_name)
         html = template.render(itinerary=itinerary)
@@ -81,7 +84,10 @@ class PdfKitItineraryExporter(ItineraryExporterPort):
         try:
             pdf = pdfkit.from_string(html, False, options=options, configuration=config)
         except OSError as exc:
+            logger.exception("PDF: fallo al generar con wkhtmltopdf en '%s'", self._wkhtmltopdf_path)
             raise RuntimeError(
                 f"No se pudo generar el PDF con wkhtmltopdf en '{self._wkhtmltopdf_path}'."
             ) from exc
-        return pdf if isinstance(pdf, bytes) else bytes(pdf)
+        result = pdf if isinstance(pdf, bytes) else bytes(pdf)
+        logger.info("PDF: itinerario id=%s generado (%s bytes)", itinerary.id, len(result))
+        return result

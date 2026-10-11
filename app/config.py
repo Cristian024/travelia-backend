@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # =========================================================
     database_prod_url: str = ""
     database_dev_url: str = ""
-    database_env: str = "prod"  # "prod" | "dev"
+    database_env: str = ""  # "prod" | "dev"
     jwt_secret_key: str = ""
 
     anthropic_api_key: str = ""
@@ -91,6 +91,13 @@ class Settings(BaseSettings):
     # Bootstrap de administradores: estos correos se registran con rol ADMIN.
     # En producción, promover vía SQL: UPDATE users SET role='ADMIN' WHERE email='...';
     admin_emails: list[str] = []
+
+    # Logging: LOG_TARGET="local" (archivo) | "azure" (Log Stream de App Service).
+    log_target: str = ""
+    log_level: str = "INFO"
+    log_file: str = "logs/travelia.log"
+    log_max_bytes: int = 5_000_000
+    log_backup_count: int = 5
 
     # Exportación a PDF: ruta al binario wkhtmltopdf.
     # Vacío => autodetección (PATH y ubicaciones típicas de Windows/Linux).

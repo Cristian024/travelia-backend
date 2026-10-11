@@ -1,11 +1,13 @@
+import logging
 from collections import Counter, OrderedDict
-from datetime import date
 from typing import Optional
 
 import httpx
 
 from app.models.weather import DailyForecast, WeatherForecast
 from app.ports.external import WeatherProviderPort
+
+logger = logging.getLogger(__name__)
 
 
 class OpenWeatherMapProvider(WeatherProviderPort):
@@ -23,6 +25,7 @@ class OpenWeatherMapProvider(WeatherProviderPort):
         end_date: str,
     ) -> Optional[WeatherForecast]:
         if not self._api_key:
+            logger.debug("OpenWeather: API key no configurada; se omite el pronóstico")
             return None
 
         params = {
@@ -35,12 +38,23 @@ class OpenWeatherMapProvider(WeatherProviderPort):
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(f"{self._base_url}/forecast", params=params)
                 if response.status_code != 200:
+                    logger.warning(
+                        "OpenWeather respondió %s para '%s,%s'", response.status_code, city, country
+                    )
                     return None
                 data = response.json()
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
+            logger.warning("OpenWeather: error de red para '%s,%s': %s", city, country, exc)
             return None
 
-        return self._parse(data, start_date, end_date)
+        forecast = self._parse(data, start_date, end_date)
+        if forecast:
+            logger.debug(
+                "OpenWeather: pronóstico para %s (%s días)", forecast.city, len(forecast.days)
+            )
+        else:
+            logger.debug("OpenWeather: sin datos para el rango %s..%s", start_date, end_date)
+        return forecast
 
     @staticmethod
     def _parse(data: dict, start_date: str, end_date: str) -> Optional[WeatherForecast]:

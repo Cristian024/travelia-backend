@@ -1,3 +1,5 @@
+import logging
+
 from app.models.user import LLMOperationType
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.llm.router import LLMRouter
@@ -9,6 +11,8 @@ from app.ports.repositories import (
     PackingListRepositoryPort,
     UserRepositoryPort,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class PackingListService:
@@ -66,6 +70,10 @@ class PackingListService:
 
         list_id = await self._packing_repo.upsert(packing_list)
         packing_list.id = list_id
+        logger.info(
+            "Checklist generado itinerario=%s items=%s (regenerate=%s)",
+            itinerary_id, len(packing_list.items), regenerate,
+        )
         return packing_list
 
     async def set_item_checked(
@@ -99,7 +107,8 @@ class PackingListService:
             forecast: WeatherForecast | None = await self._weather.get_forecast(
                 first.city, first.country, itinerary.arrival_date, itinerary.departure_date
             )
-        except Exception:
+        except Exception as exc:
+            logger.warning("Checklist: fallo al obtener clima para %s: %s", first.city, exc)
             return ""
         if not forecast:
             return ""

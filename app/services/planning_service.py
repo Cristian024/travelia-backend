@@ -1,3 +1,5 @@
+import logging
+
 from app.models.user import LLMOperationType
 from datetime import date, datetime
 
@@ -20,6 +22,8 @@ from app.schemas.planning import (
     QuestionTreeResponse,
 )
 from app.services.subscription_policy import SubscriptionPolicy
+
+logger = logging.getLogger(__name__)
 
 MIN_DEPTH_TO_GENERATE = 1  # user must answer at least one round of dynamic questions
 
@@ -51,6 +55,10 @@ class PlanningService:
 
         total_days = (departure - arrival).days
         if total_days > limits.max_total_days:
+            logger.warning(
+                "Plan %s de usuario %s rechazó %s días (máx %s)",
+                limits.subscription_type.value, user_id, total_days, limits.max_total_days,
+            )
             raise BusinessRuleError(
                 f"Your {limits.subscription_type.value} plan allows up to "
                 f"{limits.max_total_days} days. Upgrade to Premium for longer trips."
@@ -59,6 +67,10 @@ class PlanningService:
         if limits.monthly_planning_limit is not None:
             used = await self._repo.count_by_user_since(user_id, _start_of_month())
             if used >= limits.monthly_planning_limit:
+                logger.warning(
+                    "Cuota mensual alcanzada para usuario %s (%s/%s)",
+                    user_id, used, limits.monthly_planning_limit,
+                )
                 raise BusinessRuleError(
                     f"Monthly limit reached ({limits.monthly_planning_limit} complete "
                     "plannings). Upgrade to Premium for unlimited planning."
@@ -94,6 +106,7 @@ class PlanningService:
         )
         planning_id = await self._repo.insert(planning)
         planning.id = planning_id
+        logger.info("Planning creado id=%s usuario=%s destino=%s", planning_id, user_id, request.destination_country)
 
         return _to_response(planning)
 
@@ -179,6 +192,7 @@ class PlanningService:
         planning.status = PlanningStatus.ready_to_generate
         planning.updated_at = datetime.utcnow()
         await self._repo.save(planning)
+        logger.info("Planning %s marcado como listo para generar", planning_id)
         return _to_response(planning)
 
     async def get_tree(self, user_id: str, planning_id: str) -> QuestionTreeResponse:

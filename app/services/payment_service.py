@@ -104,6 +104,10 @@ class PaymentService:
             currency=plan.currency,
         )
         payment_id = await self._payment_repo.insert(payment)
+        logger.info(
+            "Checkout creado payment=%s ref=%s usuario=%s amount=%s",
+            payment_id, reference, user_id, plan.amount_in_cents,
+        )
 
         signature = self.compute_integrity_signature(
             reference, plan.amount_in_cents, plan.currency
@@ -155,6 +159,10 @@ class PaymentService:
         await self._payment_repo.update_status(reference, status, result.transaction_id)
         if status == PaymentStatus.approved:
             await self._user_repo.activate_premium(user_id)
+        logger.info(
+            "Transacción server-side ref=%s usuario=%s estado=%s tx=%s",
+            reference, user_id, status.value, result.transaction_id,
+        )
 
         return TransactionResponse(
             payment_id=payment_id,

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from app.core.exceptions import NotFoundError
@@ -5,6 +6,8 @@ from app.models.user import SubscriptionType
 from app.ports.repositories import PlanningRepositoryPort, UserRepositoryPort
 from app.schemas.subscription import SubscriptionResponse
 from app.services.subscription_policy import SubscriptionPolicy
+
+logger = logging.getLogger(__name__)
 
 
 class SubscriptionService:
@@ -49,6 +52,7 @@ class SubscriptionService:
             "updated_at": datetime.utcnow(),
         }
         await self._user_repo.update_by_id(user_id, updates)
+        logger.info("Suscripción de usuario %s cambiada a %s", user_id, subscription_type.value)
         return await self.get_status(user_id)
 
 

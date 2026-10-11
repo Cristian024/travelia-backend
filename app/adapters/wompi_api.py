@@ -1,9 +1,12 @@
+import logging
 from typing import Any, Optional
 
 import httpx
 
 from app.core.exceptions import PaymentGatewayError
 from app.ports.external import GatewayTransactionResult, PaymentGatewayPort
+
+logger = logging.getLogger(__name__)
 
 
 class WompiApiClient(PaymentGatewayPort):
@@ -28,8 +31,13 @@ class WompiApiClient(PaymentGatewayPort):
         redirect_url: Optional[str] = None,
     ) -> GatewayTransactionResult:
         if not self._private_key:
+            logger.error("Wompi: WOMPI_PRIVATE_KEY no está configurado")
             raise PaymentGatewayError("WOMPI_PRIVATE_KEY no está configurado")
 
+        logger.info(
+            "Wompi: creando transacción ref=%s amount=%s %s método=%s",
+            reference, amount_in_cents, currency, payment_method.get("type"),
+        )
         payload: dict[str, Any] = {
             "amount_in_cents": amount_in_cents,
             "currency": currency,
@@ -51,12 +59,22 @@ class WompiApiClient(PaymentGatewayPort):
                     json=payload,
                 )
         except httpx.HTTPError as exc:
+            logger.error("Wompi: error de red creando transacción ref=%s: %s", reference, exc)
             raise PaymentGatewayError(f"No se pudo contactar a Wompi: {exc}") from exc
 
         if response.status_code >= 400:
-            raise PaymentGatewayError(f"Wompi rechazó la transacción: {_extract_error(response)}")
+            detail = _extract_error(response)
+            logger.error(
+                "Wompi: transacción rechazada ref=%s status=%s: %s",
+                reference, response.status_code, detail,
+            )
+            raise PaymentGatewayError(f"Wompi rechazó la transacción: {detail}")
 
         data = response.json().get("data", {})
+        logger.info(
+            "Wompi: transacción creada id=%s status=%s ref=%s",
+            data.get("id"), data.get("status"), reference,
+        )
         return GatewayTransactionResult(
             transaction_id=str(data.get("id", "")),
             status=str(data.get("status", "")),

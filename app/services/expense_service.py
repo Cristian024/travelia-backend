@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import datetime
 from typing import Optional
@@ -12,6 +13,8 @@ from app.schemas.expense import (
     ExpenseSummaryResponse,
     UpdateExpenseRequest,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ExpenseService:
@@ -38,6 +41,10 @@ class ExpenseService:
         )
         expense_id = await self._repo.insert(expense)
         expense.id = expense_id
+        logger.info(
+            "Gasto registrado id=%s itinerario=%s cat=%s monto=%s",
+            expense_id, itinerary_id, request.category.value, request.amount,
+        )
         return ExpenseResponse.from_domain(expense)
 
     async def list(self, user_id: str, itinerary_id: str) -> list[ExpenseResponse]:

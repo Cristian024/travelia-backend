@@ -28,6 +28,9 @@ class OpenWeatherMapProvider(WeatherProviderPort):
             logger.debug("OpenWeather: API key no configurada; se omite el pronóstico")
             return None
 
+        cityParts = city.split("/");
+        city = cityParts[0].strip()
+
         params = {
             "q": f"{city},{country}" if country else city,
             "appid": self._api_key,

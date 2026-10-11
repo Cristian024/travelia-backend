@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     openweather_api_key: str = ""
 
+    # Wompi: secretos. NUNCA exponerlos.
+    wompi_events_secret: str = ""      # firma/checksum de eventos (webhook)
+    wompi_integrity_secret: str = ""   # firma de integridad (checkout/widget)
+    wompi_private_key: str = ""        # autenticación server-side contra la API de Wompi
+
     # =========================================================
     # CONFIGURACIÓN NO SENSIBLE -> defaults en código
     # =========================================================
@@ -70,6 +75,20 @@ class Settings(BaseSettings):
 
     # APIs externas
     openweather_base_url: str = "https://api.openweathermap.org/data/2.5"
+
+    # Wompi (pasarela de pagos - Sandbox).
+    wompi_pub_test_key: str = "pub_test_8LasskVBbaOZqb9XT3DfwZSszjwSQds3"
+    wompi_environment: str = "sandbox"
+    wompi_api_base_url: str = "https://sandbox.wompi.co/v1"
+    wompi_currency: str = "COP"
+    wompi_events_endpoint: str = "/api/v1/webhooks/wompi"
+
+    # URL de retorno tras el pago (el PRECIO del plan vive en la tabla `plans`).
+    wompi_redirect_url: str = "https://travelia.app/payment/result"
+
+    # Bootstrap de administradores: estos correos se registran con rol ADMIN.
+    # En producción, promover vía SQL: UPDATE users SET role='ADMIN' WHERE email='...';
+    admin_emails: list[str] = []
 
     # Exportación a PDF: ruta al binario wkhtmltopdf.
     # Vacío => autodetección (PATH y ubicaciones típicas de Windows/Linux).

@@ -6,27 +6,32 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.models.user import UserDocument
+from app.models.user import UserDocument, UserRole
 from app.ports.repositories import UserRepositoryPort
 from app.schemas.user import LoginRequest, RegisterRequest, TokenResponse
 
 
 class AuthService:
-    def __init__(self, user_repo: UserRepositoryPort) -> None:
+    def __init__(
+        self, user_repo: UserRepositoryPort, admin_emails: list[str] | None = None
+    ) -> None:
         self._repo = user_repo
+        self._admin_emails = {e.lower() for e in (admin_emails or [])}
 
     async def register(self, request: RegisterRequest) -> TokenResponse:
         if await self._repo.email_exists(request.email):
             raise ConflictError("Email already registered")
 
+        email = request.email.lower()
         user = UserDocument(
-            email=request.email.lower(),
+            email=email,
             hashed_password=hash_password(request.password),
             full_name=request.full_name,
             birth_date=request.birth_date,
             country_of_residence=request.country_of_residence,
             phone=request.phone,
             preferred_language=request.preferred_language,
+            role=UserRole.admin if email in self._admin_emails else UserRole.user,
         )
         user_id = await self._repo.insert(user)
         return TokenResponse(

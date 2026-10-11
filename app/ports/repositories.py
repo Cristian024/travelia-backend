@@ -12,6 +12,8 @@ from typing import Optional
 from app.models.expense import Expense
 from app.models.itinerary import ItineraryDocument
 from app.models.packing import PackingList
+from app.models.payment import Payment, PaymentStatus
+from app.models.plan import Plan
 from app.models.planning import PlanningDocument
 from app.models.user import UserDocument
 
@@ -31,6 +33,15 @@ class UserRepositoryPort(ABC):
 
     @abstractmethod
     async def update_by_id(self, id_str: str, update_data: dict) -> bool: ...
+
+    @abstractmethod
+    async def activate_premium(self, id_str: str) -> bool: ...
+
+    @abstractmethod
+    async def list_all(self, limit: int, offset: int) -> list[UserDocument]: ...
+
+    @abstractmethod
+    async def count_all(self) -> int: ...
 
 
 class PlanningRepositoryPort(ABC):
@@ -114,3 +125,45 @@ class PackingListRepositoryPort(ABC):
     async def set_item_checked(
         self, itinerary_id: str, position: int, checked: bool
     ) -> bool: ...
+
+
+class PaymentRepositoryPort(ABC):
+    @abstractmethod
+    async def insert(self, payment: Payment) -> str: ...
+
+    @abstractmethod
+    async def find_by_reference(self, reference: str) -> Optional[Payment]: ...
+
+    @abstractmethod
+    async def find_by_id(self, payment_id: str) -> Optional[Payment]: ...
+
+    @abstractmethod
+    async def update_status(
+        self,
+        reference: str,
+        status: PaymentStatus,
+        transaction_id: Optional[str] = None,
+    ) -> bool: ...
+
+    @abstractmethod
+    async def list_all(self, limit: int, offset: int) -> list[Payment]: ...
+
+    @abstractmethod
+    async def count_all(self) -> int: ...
+
+
+class PlanRepositoryPort(ABC):
+    @abstractmethod
+    async def find_by_code(self, code: str) -> Optional[Plan]: ...
+
+    @abstractmethod
+    async def find_by_id(self, plan_id: str) -> Optional[Plan]: ...
+
+    @abstractmethod
+    async def list_all(self) -> list[Plan]: ...
+
+    @abstractmethod
+    async def upsert(self, plan: Plan) -> str: ...
+
+    @abstractmethod
+    async def delete(self, plan_id: str) -> bool: ...

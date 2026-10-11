@@ -4,9 +4,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import get_settings
 from app.core.database import get_database
+from app.core.exceptions import ForbiddenError
 from app.core.security import decode_token
+from app.models.user import UserDocument
 from app.adapters.pdf_exporter import PdfKitItineraryExporter
 from app.adapters.weather_openweather import OpenWeatherMapProvider
+from app.adapters.wompi_api import WompiApiClient
 from app.llm.client import LLMClient
 from app.llm.factory import LLMProviderFactory
 from app.llm.interfaces import LLMProvider
@@ -14,12 +17,16 @@ from app.llm.router import LLMRouter
 from app.repositories.expense_repository import ExpenseRepository
 from app.repositories.itinerary_repository import ItineraryRepository
 from app.repositories.packing_repository import PackingListRepository
+from app.repositories.payment_repository import PaymentRepository
+from app.repositories.plan_repository import PlanRepository
 from app.repositories.planning_repository import PlanningRepository
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
 from app.services.expense_service import ExpenseService
 from app.services.itinerary_service import ItineraryService
 from app.services.packing_service import PackingListService
+from app.services.payment_service import PaymentService, WompiParams
+from app.services.plan_service import PlanService
 from app.services.planning_service import PlanningService
 from app.services.subscription_service import SubscriptionService
 from app.services.user_service import UserService
@@ -43,6 +50,12 @@ def get_expense_repo() -> ExpenseRepository:
 
 def get_packing_repo() -> PackingListRepository:
     return PackingListRepository(get_database())
+
+def get_payment_repo() -> PaymentRepository:
+    return PaymentRepository(get_database())
+
+def get_plan_repo() -> PlanRepository:
+    return PlanRepository(get_database())
 
 # --- LLM provider & client ---
 
@@ -118,7 +131,12 @@ def get_itinerary_exporter() -> PdfKitItineraryExporter:
 # --- Service factories ---
 
 def get_auth_service(repo: Annotated[UserRepository, Depends(get_user_repo)]) -> AuthService:
-    return AuthService(repo)
+    return AuthService(repo, _settings.admin_emails)
+
+def get_plan_service(
+    plan_repo: Annotated[PlanRepository, Depends(get_plan_repo)],
+) -> PlanService:
+    return PlanService(plan_repo)
 
 def get_user_service(repo: Annotated[UserRepository, Depends(get_user_repo)]) -> UserService:
     return UserService(repo)
@@ -161,6 +179,30 @@ def get_subscription_service(
 ) -> SubscriptionService:
     return SubscriptionService(user_repo, planning_repo)
 
+def get_payment_gateway() -> WompiApiClient:
+    return WompiApiClient(
+        private_key=_settings.wompi_private_key,
+        base_url=_settings.wompi_api_base_url,
+    )
+
+def get_wompi_params() -> WompiParams:
+    return WompiParams(
+        events_secret=_settings.wompi_events_secret,
+        integrity_secret=_settings.wompi_integrity_secret,
+        public_key=_settings.wompi_pub_test_key,
+        redirect_url=_settings.wompi_redirect_url,
+    )
+
+def get_payment_service(
+    user_repo: Annotated[UserRepository, Depends(get_user_repo)],
+    payment_repo: Annotated[PaymentRepository, Depends(get_payment_repo)],
+    plan_repo: Annotated[PlanRepository, Depends(get_plan_repo)],
+    gateway: Annotated[WompiApiClient, Depends(get_payment_gateway)],
+    params: Annotated[WompiParams, Depends(get_wompi_params)],
+) -> PaymentService:
+    """Servicio de pagos (checkout, transacción server-side y webhook)."""
+    return PaymentService(user_repo, payment_repo, plan_repo, gateway, params)
+
 # --- Auth dependency ---
 
 async def get_current_user_id(
@@ -186,3 +228,24 @@ async def get_current_user_id(
     return user_id
 
 CurrentUser = Annotated[str, Depends(get_current_user_id)]
+
+
+async def get_current_user(
+    user_id: CurrentUser,
+    user_repo: Annotated[UserRepository, Depends(get_user_repo)],
+) -> UserDocument:
+    user = await user_repo.find_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User no longer exists")
+    return user
+
+
+async def require_admin(
+    user: Annotated[UserDocument, Depends(get_current_user)],
+) -> UserDocument:
+    if not user.is_admin:
+        raise ForbiddenError("Admin privileges required")
+    return user
+
+
+CurrentAdmin = Annotated[UserDocument, Depends(require_admin)]

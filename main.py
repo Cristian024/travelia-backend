@@ -9,6 +9,8 @@ from app.core.exceptions import register_exception_handlers
 from app.repositories.expense_repository import ExpenseRepository
 from app.repositories.itinerary_repository import ItineraryRepository
 from app.repositories.packing_repository import PackingListRepository
+from app.repositories.payment_repository import PaymentRepository
+from app.repositories.plan_repository import PlanRepository
 from app.repositories.planning_repository import PlanningRepository
 from app.repositories.user_repository import UserRepository
 
@@ -24,6 +26,8 @@ async def lifespan(app: FastAPI):
     await ItineraryRepository(db).create_indexes()
     await ExpenseRepository(db).create_indexes()
     await PackingListRepository(db).create_indexes()
+    await PaymentRepository(db).create_indexes()
+    await PlanRepository(db).create_indexes()
     yield
     await close_db()
 

@@ -3,6 +3,8 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, field_validator
 import re
 
+from app.models.user import SubscriptionType, UserRole
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -68,8 +70,32 @@ class UserResponse(BaseModel):
     country_of_residence: str
     phone: Optional[str]
     preferred_language: str
+    role: UserRole
     created_at: datetime
     updated_at: datetime
+
+
+class UserAdminResponse(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    role: UserRole
+    subscription_type: SubscriptionType
+    premium_since: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+
+class UpdateUserRoleRequest(BaseModel):
+    role: UserRole
+
+
+class PaginatedUsersResponse(BaseModel):
+    items: list[UserAdminResponse]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
 
 
 class TokenResponse(BaseModel):

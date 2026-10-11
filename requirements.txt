@@ -1,19 +1,28 @@
+# Framework y servidor
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
+
+# Base de datos
 asyncpg>=0.29.0
-pydantic>=2.8.0
+
+# Validación y configuración
+pydantic[email]>=2.8.0
 pydantic-settings>=2.4.0
-python-jose[cryptography]>=3.3.0
-passlib[bcrypt]>=1.7.4
-python-multipart>=0.0.9
-anthropic>=0.34.0
 python-dotenv>=1.0.0
+
+# Autenticación y seguridad (el hashing usa el esquema 'argon2')
+python-jose[cryptography]>=3.3.0
+passlib[argon2]>=1.7.4
+argon2-cffi>=23.1.0
+python-multipart>=0.0.9
+
+# Proveedores LLM
+anthropic>=0.34.0
+openai>=1.54.0
+groq>=0.11.0
+google-genai>=1.0.0
 
 # APIs externas e infraestructura
 httpx>=0.27.0
 jinja2>=3.1.0
 pdfkit>=1.0.0
-
-# Proveedores opcionales (instalar según el LLM_PROVIDER elegido)
-# openai>=1.54.0
-# google-genai>=1.0.0  (requerido para FREE_LLM_PROVIDER=gemini)

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 import asyncpg
@@ -8,7 +9,8 @@ from app.repositories.base import BaseRepository, new_id
 
 _COLUMNS = (
     "id, email, hashed_password, full_name, birth_date, country_of_residence,"
-    " phone, preferred_language, subscription_type, premium_since, created_at, updated_at"
+    " phone, preferred_language, subscription_type, premium_since, role,"
+    " created_at, updated_at"
 )
 
 _UPDATABLE_COLUMNS = {
@@ -21,6 +23,7 @@ _UPDATABLE_COLUMNS = {
     "preferred_language",
     "subscription_type",
     "premium_since",
+    "role",
     "updated_at",
 }
 
@@ -46,12 +49,12 @@ class UserRepository(BaseRepository[UserDocument], UserRepositoryPort):
             """
             INSERT INTO users (id, email, hashed_password, full_name, birth_date,
                                country_of_residence, phone, preferred_language,
-                               subscription_type, premium_since, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                               subscription_type, premium_since, role, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             """,
             user_id, user.email, user.hashed_password, user.full_name, user.birth_date,
             user.country_of_residence, user.phone, user.preferred_language,
-            user.subscription_type.value, user.premium_since,
+            user.subscription_type.value, user.premium_since, user.role.value,
             user.created_at, user.updated_at,
         )
         return user_id
@@ -64,6 +67,19 @@ class UserRepository(BaseRepository[UserDocument], UserRepositoryPort):
         result = await self._pool.execute(
             f"UPDATE users SET {assignments} WHERE id = $1",
             id_str, *updates.values(),
+        )
+        return result.split()[-1] != "0"
+
+    async def activate_premium(self, id_str: str) -> bool:
+        """Activa la suscripción PREMIUM de un usuario (UPDATE dedicado)."""
+        now = datetime.utcnow()
+        result = await self._pool.execute(
+            """
+            UPDATE users
+            SET subscription_type = 'PREMIUM', premium_since = $2, updated_at = $2
+            WHERE id = $1
+            """,
+            id_str, now,
         )
         return result.split()[-1] != "0"
 
@@ -82,6 +98,7 @@ class UserRepository(BaseRepository[UserDocument], UserRepositoryPort):
                 subscription_type TEXT NOT NULL DEFAULT 'FREE'
                     CHECK (subscription_type IN ('FREE', 'PREMIUM')),
                 premium_since TIMESTAMP,
+                role TEXT NOT NULL DEFAULT 'USER' CHECK (role IN ('USER', 'ADMIN')),
                 created_at TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP NOT NULL
             )
@@ -90,6 +107,19 @@ class UserRepository(BaseRepository[UserDocument], UserRepositoryPort):
         await self._pool.execute(
             "CREATE INDEX IF NOT EXISTS idx_users_subscription_type ON users(subscription_type)"
         )
+        await self._pool.execute(
+            "CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)"
+        )
+
+    async def list_all(self, limit: int, offset: int) -> list[UserDocument]:
+        rows = await self._pool.fetch(
+            f"SELECT {_COLUMNS} FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+            limit, offset,
+        )
+        return [self._to_model(r) for r in rows]
+
+    async def count_all(self) -> int:
+        return await self._pool.fetchval("SELECT COUNT(*) FROM users")
 
     def _to_model(self, row: Optional[asyncpg.Record]) -> Optional[UserDocument]:
         if not row:

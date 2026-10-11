@@ -34,6 +34,11 @@ class BusinessRuleError(TraveliaException):
         super().__init__(message, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
+class PaymentGatewayError(TraveliaException):
+    def __init__(self, message: str = "Payment gateway error"):
+        super().__init__(message, status.HTTP_502_BAD_GATEWAY)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(TraveliaException)
     async def travelia_exception_handler(request: Request, exc: TraveliaException) -> JSONResponse:

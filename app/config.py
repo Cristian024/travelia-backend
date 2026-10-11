@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     # =========================================================
     # SECRETOS -> provistos por .env
     # =========================================================
-    database_url: str = ""
+    database_prod_url: str = ""
+    database_dev_url: str = ""
+    database_env: str = "prod"  # "prod" | "dev"
     jwt_secret_key: str = ""
 
     anthropic_api_key: str = ""

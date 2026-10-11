@@ -30,14 +30,15 @@ async def lifespan(app: FastAPI):
     await connect_db()
     db = get_database()
     try:
+        # `plans` primero: `users.subscription_type` tiene FK a plans(code).
         for repo in (
+            PlanRepository,
             UserRepository,
             PlanningRepository,
             ItineraryRepository,
             ExpenseRepository,
             PackingListRepository,
             PaymentRepository,
-            PlanRepository,
         ):
             await repo(db).create_indexes()
         logger.info("Esquema de base de datos verificado/creado.")

@@ -3,6 +3,7 @@ from typing import Optional
 
 import asyncpg
 
+from app.models.plan import PlanCode
 from app.models.user import UserDocument
 from app.ports.repositories import UserRepositoryPort
 from app.repositories.base import BaseRepository, new_id
@@ -54,7 +55,7 @@ class UserRepository(BaseRepository[UserDocument], UserRepositoryPort):
             """,
             user_id, user.email, user.hashed_password, user.full_name, user.birth_date,
             user.country_of_residence, user.phone, user.preferred_language,
-            user.subscription_type.value, user.premium_since, user.role.value,
+            user.subscription_type, user.premium_since, user.role.value,
             user.created_at, user.updated_at,
         )
         return user_id
@@ -76,10 +77,10 @@ class UserRepository(BaseRepository[UserDocument], UserRepositoryPort):
         result = await self._pool.execute(
             """
             UPDATE users
-            SET subscription_type = 'PREMIUM', premium_since = $2, updated_at = $2
+            SET subscription_type = $3, premium_since = $2, updated_at = $2
             WHERE id = $1
             """,
-            id_str, now,
+            id_str, now, PlanCode.PREMIUM,
         )
         return result.split()[-1] != "0"
 
@@ -95,8 +96,7 @@ class UserRepository(BaseRepository[UserDocument], UserRepositoryPort):
                 country_of_residence TEXT NOT NULL,
                 phone TEXT,
                 preferred_language TEXT NOT NULL DEFAULT 'es',
-                subscription_type TEXT NOT NULL DEFAULT 'FREE'
-                    CHECK (subscription_type IN ('FREE', 'PREMIUM')),
+                subscription_type TEXT NOT NULL DEFAULT 'FREE' REFERENCES plans(code),
                 premium_since TIMESTAMP,
                 role TEXT NOT NULL DEFAULT 'USER' CHECK (role IN ('USER', 'ADMIN')),
                 created_at TIMESTAMP NOT NULL,

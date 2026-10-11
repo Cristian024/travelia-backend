@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     wompi_events_endpoint: str = "/api/v1/webhooks/wompi"
 
     # URL de retorno tras el pago (el PRECIO del plan vive en la tabla `plans`).
-    wompi_redirect_url: str = "https://travelia.app/payment/result"
+    wompi_redirect_url: str = "https://travelia-bkbwcxa2d0fwaee5.mexicocentral-01.azurewebsites.net/api/v1/webhooks/wompi"
 
     # Bootstrap de administradores: estos correos se registran con rol ADMIN.
     # En producción, promover vía SQL: UPDATE users SET role='ADMIN' WHERE email='...';

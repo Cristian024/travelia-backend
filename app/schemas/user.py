@@ -3,7 +3,7 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, field_validator
 import re
 
-from app.models.user import SubscriptionType, UserRole
+from app.models.user import UserRole
 
 
 class RegisterRequest(BaseModel):
@@ -80,7 +80,7 @@ class UserAdminResponse(BaseModel):
     email: str
     full_name: str
     role: UserRole
-    subscription_type: SubscriptionType
+    subscription_type: str
     premium_since: Optional[datetime]
     created_at: datetime
     updated_at: datetime

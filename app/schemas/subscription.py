@@ -3,15 +3,13 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from app.models.user import SubscriptionType
-
 
 class ChangeSubscriptionRequest(BaseModel):
-    subscription_type: SubscriptionType
+    subscription_type: str
 
 
 class SubscriptionResponse(BaseModel):
-    subscription_type: SubscriptionType
+    subscription_type: str
     is_premium: bool
     premium_since: Optional[datetime]
     monthly_planning_limit: Optional[int]

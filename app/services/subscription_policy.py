@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from app.models.user import SubscriptionType
+from app.models.plan import PlanCode
 
 
 @dataclass(frozen=True)
 class PlanLimits:
-    subscription_type: SubscriptionType
+    subscription_type: str
     monthly_planning_limit: Optional[int]
     max_total_days: int
     max_question_depth: int
@@ -15,15 +15,16 @@ class PlanLimits:
 
     @property
     def is_premium(self) -> bool:
-        return self.subscription_type == SubscriptionType.premium
+        return self.subscription_type == PlanCode.PREMIUM
 
 
 class SubscriptionPolicy:
     """
-    Fuente única de verdad de las reglas de negocio Freemium/Premium.
+    Reglas de negocio de los dos niveles (FREE / PREMIUM).
 
-    Estas reglas viven en el dominio (no en .env ni en config.py): son
-    decisiones de producto, no configuración de infraestructura.
+    La LISTA de suscripciones disponibles vive en la tabla `plans`; aquí solo
+    se definen los límites de negocio de los niveles conocidos. Un código de
+    plan desconocido se trata como FREE.
     """
 
     # --- Plan FREE ---
@@ -39,8 +40,8 @@ class SubscriptionPolicy:
     PREMIUM_MAX_DESTINATIONS = 8
     PREMIUM_QUESTIONS_PER_ROUND = 5
 
-    def limits_for(self, subscription_type: SubscriptionType) -> PlanLimits:
-        if subscription_type == SubscriptionType.premium:
+    def limits_for(self, subscription_type: str) -> PlanLimits:
+        if subscription_type == PlanCode.PREMIUM:
             return PlanLimits(
                 subscription_type=subscription_type,
                 monthly_planning_limit=None,

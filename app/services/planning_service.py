@@ -57,10 +57,10 @@ class PlanningService:
         if total_days > limits.max_total_days:
             logger.warning(
                 "Plan %s de usuario %s rechazó %s días (máx %s)",
-                limits.subscription_type.value, user_id, total_days, limits.max_total_days,
+                limits.subscription_type, user_id, total_days, limits.max_total_days,
             )
             raise BusinessRuleError(
-                f"Your {limits.subscription_type.value} plan allows up to "
+                f"Your {limits.subscription_type} plan allows up to "
                 f"{limits.max_total_days} days. Upgrade to Premium for longer trips."
             )
 

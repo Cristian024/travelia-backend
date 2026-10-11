@@ -2,7 +2,6 @@ from app.models.user import LLMOperationType
 from app.config import Settings
 from app.llm.client import LLMClient
 from app.llm.factory import LLMProviderFactory
-from app.models.user import SubscriptionType
 
 
 class LLMRouter:
@@ -15,13 +14,13 @@ class LLMRouter:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def client_for(self, subscription_type: SubscriptionType, operation_type: LLMOperationType) -> LLMClient:
+    def client_for(self, subscription_type: str, operation_type: LLMOperationType) -> LLMClient:
         provider = LLMProviderFactory.create_for_subscription(
             subscription_type, self._settings, operation_type
         )
         return LLMClient(provider)
 
-    def provider_name_for(self, subscription_type: SubscriptionType, operation_type: LLMOperationType) -> str:
+    def provider_name_for(self, subscription_type: str, operation_type: LLMOperationType) -> str:
         return LLMProviderFactory.create_for_subscription(
             subscription_type, self._settings, operation_type
         ).provider_name

@@ -82,13 +82,13 @@ class PlanRepository(BaseRepository[Plan], PlanRepositoryPort):
             )
             """
         )
-        # Bootstrap: precio inicial del plan PREMIUM (editable en BD).
+        # Bootstrap: planes iniciales (editables en BD).
         await self._pool.execute(
             """
             INSERT INTO plans (id, code, name, amount_in_cents, currency,
                                duration_days, is_active, created_at, updated_at)
-            VALUES ('plan_premium', 'PREMIUM', 'Plan Premium', 4990000, 'COP',
-                    30, TRUE, NOW(), NOW())
+            VALUES ('plan_free', 'FREE', 'Plan Free', 0, 'COP', 0, TRUE, NOW(), NOW()),
+                   ('plan_premium', 'PREMIUM', 'Plan Premium', 4990000, 'COP', 30, TRUE, NOW(), NOW())
             ON CONFLICT (code) DO NOTHING
             """
         )

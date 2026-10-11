@@ -1,7 +1,7 @@
 from app.models.user import LLMOperationType
 from app.config import Settings
 from app.llm.interfaces import LLMProvider
-from app.models.user import SubscriptionType
+from app.models.plan import PlanCode
 
 
 def _provider_kwargs(provider_name: str, settings: Settings, model: str) -> dict:
@@ -28,11 +28,11 @@ class LLMProviderFactory:
     # Suscripción -> (atributo del proveedor, atributo del modelo) en Settings.
     # FREE se enruta a modelos económicos; PREMIUM a modelos de alto razonamiento.
     _SUBSCRIPTION_ROUTING: dict[str, dict[LLMOperationType, tuple[str, str]]] = {
-        SubscriptionType.free.value: {
+        PlanCode.FREE: {
             LLMOperationType.questions: ("free_llm_provider_questions", "free_llm_model_questions"),
             LLMOperationType.itinerary: ("free_llm_provider_itinerary", "free_llm_model_itinerary"),
         },
-        SubscriptionType.premium.value: {
+        PlanCode.PREMIUM: {
             LLMOperationType.questions: ("premium_llm_provider_questions", "premium_llm_model_questions"),
             LLMOperationType.itinerary: ("premium_llm_provider_itinerary", "premium_llm_model_itinerary"),
         },
@@ -56,16 +56,12 @@ class LLMProviderFactory:
     @classmethod
     def create_for_subscription(
         cls,
-        subscription_type: SubscriptionType | str,
+        subscription_type: str,
         settings: Settings,
         operation_type: LLMOperationType | str,
     ) -> LLMProvider:
         """Enruta al proveedor/modelo según el tipo de suscripción del usuario."""
-        key = (
-            subscription_type.value
-            if isinstance(subscription_type, SubscriptionType)
-            else str(subscription_type)
-        ).upper()
+        key = str(getattr(subscription_type, "value", subscription_type)).upper()
 
         operation_key = (
             operation_type.value
@@ -74,9 +70,9 @@ class LLMProviderFactory:
         ).lower()
 
         provider_attr, model_attr = cls._SUBSCRIPTION_ROUTING.get(
-            key, cls._SUBSCRIPTION_ROUTING[SubscriptionType.free.value]
+            key, cls._SUBSCRIPTION_ROUTING[PlanCode.FREE]
         ).get(
-            operation_key, cls._SUBSCRIPTION_ROUTING[SubscriptionType.free.value][LLMOperationType.questions]
+            operation_key, cls._SUBSCRIPTION_ROUTING[PlanCode.FREE][LLMOperationType.questions]
         )
         provider_name = getattr(settings, provider_attr).lower()
         model = getattr(settings, model_attr)

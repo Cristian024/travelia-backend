@@ -18,23 +18,23 @@ class _LoggedConnection:
         self._conn = conn
 
     @staticmethod
-    def _log_query(query: Any) -> None:
-        logger.debug("SQL: %s", _format(query))
+    def _log_query(query: Any, args: Any) -> None:
+        logger.debug("Executing Query:  %s with params %s", _format(query), args)
 
     async def execute(self, query, *args, **kwargs):
-        self._log_query(query)
+        self._log_query(query, args)
         return await self._conn.execute(query, *args, **kwargs)
 
     async def fetch(self, query, *args, **kwargs):
-        self._log_query(query)
+        self._log_query(query, args)
         return await self._conn.fetch(query, *args, **kwargs)
 
     async def fetchrow(self, query, *args, **kwargs):
-        self._log_query(query)
+        self._log_query(query, args)
         return await self._conn.fetchrow(query, *args, **kwargs)
 
     async def fetchval(self, query, *args, **kwargs):
-        self._log_query(query)
+        self._log_query(query, args)
         return await self._conn.fetchval(query, *args, **kwargs)
 
     def transaction(self, *args, **kwargs):
@@ -68,19 +68,19 @@ class LoggedPool:
         return _AcquireContext(self._pool)
 
     async def execute(self, query, *args, **kwargs):
-        logger.debug("SQL: %s", _format(query))
+        logger.debug("Executing Query:  %s with params %s", _format(query), args)
         return await self._pool.execute(query, *args, **kwargs)
 
     async def fetch(self, query, *args, **kwargs):
-        logger.debug("SQL: %s", _format(query))
+        logger.debug("Executing Query:  %s with params %s", _format(query), args)
         return await self._pool.fetch(query, *args, **kwargs)
 
     async def fetchrow(self, query, *args, **kwargs):
-        logger.debug("SQL: %s", _format(query))
+        logger.debug("Executing Query:  %s with params %s", _format(query), args)
         return await self._pool.fetchrow(query, *args, **kwargs)
 
     async def fetchval(self, query, *args, **kwargs):
-        logger.debug("SQL: %s", _format(query))
+        logger.debug("Executing Query:  %s with params %s", _format(query), args)
         return await self._pool.fetchval(query, *args, **kwargs)
 
     async def close(self):

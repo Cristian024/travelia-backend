@@ -176,8 +176,9 @@ def get_packing_service(
 def get_subscription_service(
     user_repo: Annotated[UserRepository, Depends(get_user_repo)],
     planning_repo: Annotated[PlanningRepository, Depends(get_planning_repo)],
+    plan_repo: Annotated[PlanRepository, Depends(get_plan_repo)],
 ) -> SubscriptionService:
-    return SubscriptionService(user_repo, planning_repo)
+    return SubscriptionService(user_repo, planning_repo, plan_repo)
 
 def get_payment_gateway() -> WompiApiClient:
     return WompiApiClient(

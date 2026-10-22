@@ -1,20 +1,15 @@
 import logging
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.adapters.logging_factory import build_logging_adapter
 from app.api.v1.router import api_router
 from app.config import get_settings
-from app.core.database import close_db, connect_db, get_database
+from app.core.backend import close_backend, connect_with_fallback
 from app.core.exceptions import register_exception_handlers
-from app.repositories.expense_repository import ExpenseRepository
-from app.repositories.itinerary_repository import ItineraryRepository
-from app.repositories.packing_repository import PackingListRepository
-from app.repositories.payment_repository import PaymentRepository
-from app.repositories.plan_repository import PlanRepository
-from app.repositories.planning_repository import PlanningRepository
-from app.repositories.user_repository import UserRepository
+from app.repositories.factory import ensure_schema
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -24,30 +19,22 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     build_logging_adapter(settings).configure()
     logger.info(
-        "Iniciando %s v%s (log_target=%s)",
-        settings.app_name, settings.app_version, settings.log_target or "local",
+        "Iniciando %s v%s (log_target=%s, backend=%s)",
+        settings.app_name,
+        settings.app_version,
+        settings.log_target or "local",
+        settings.database_backend,
     )
-    await connect_db()
-    db = get_database()
     try:
-        # `plans` primero: `users.subscription_type` tiene FK a plans(code).
-        for repo in (
-            PlanRepository,
-            UserRepository,
-            PlanningRepository,
-            ItineraryRepository,
-            ExpenseRepository,
-            PackingListRepository,
-            PaymentRepository,
-        ):
-            await repo(db).create_indexes()
+        await connect_with_fallback()
+        await ensure_schema()
         logger.info("Esquema de base de datos verificado/creado.")
     except Exception:
-        logger.exception("Fallo al inicializar el esquema de base de datos")
+        logger.exception("Fallo al inicializar la persistencia")
         raise
     yield
     logger.info("Apagando aplicación...")
-    await close_db()
+    await close_backend()
 
 
 def create_app() -> FastAPI:

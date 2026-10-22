@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     database_env: str = ""  # "prod" | "dev"
     jwt_secret_key: str = ""
 
+    # MongoDB (contiene credenciales en la URL)
+    mongodb_prod_url: str = ""
+    mongodb_dev_url: str = ""
+
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     groq_api_key: str = ""
@@ -45,6 +49,14 @@ class Settings(BaseSettings):
     app_name: str = "Travelia Backend"
     app_version: str = "1.0.0"
     debug: bool = False
+
+    # Backend de persistencia: "mongo" (por defecto) | "postgres"
+    database_backend: str = "mongo"
+    # Si el backend primario falla al conectar, intenta el otro (circuit breaker).
+    database_fallback_enabled: bool = True
+    # MongoDB
+    mongodb_db_name: str = "travelia"
+    mongodb_timeout_ms: int = 5000
 
     # Conexión a PostgreSQL
     db_min_size: int = 1

@@ -14,6 +14,7 @@ from app.llm.client import LLMClient
 from app.llm.factory import LLMProviderFactory
 from app.llm.interfaces import LLMProvider
 from app.llm.router import LLMRouter
+from app.repositories import factory as repo_factory
 from app.repositories.expense_repository import ExpenseRepository
 from app.repositories.itinerary_repository import ItineraryRepository
 from app.repositories.packing_repository import PackingListRepository
@@ -34,28 +35,28 @@ from app.services.user_service import UserService
 _bearer = HTTPBearer()
 _settings = get_settings()
 
-# --- Repository factories ---
+# --- Repository factories (backend-agnostic: Mongo o PostgreSQL) ---
 
-def get_user_repo() -> UserRepository:
-    return UserRepository(get_database())
+def get_user_repo():
+    return repo_factory.user_repo()
 
-def get_planning_repo() -> PlanningRepository:
-    return PlanningRepository(get_database())
+def get_planning_repo():
+    return repo_factory.planning_repo()
 
-def get_itinerary_repo() -> ItineraryRepository:
-    return ItineraryRepository(get_database())
+def get_itinerary_repo():
+    return repo_factory.itinerary_repo()
 
-def get_expense_repo() -> ExpenseRepository:
-    return ExpenseRepository(get_database())
+def get_expense_repo():
+    return repo_factory.expense_repo()
 
-def get_packing_repo() -> PackingListRepository:
-    return PackingListRepository(get_database())
+def get_packing_repo():
+    return repo_factory.packing_repo()
 
-def get_payment_repo() -> PaymentRepository:
-    return PaymentRepository(get_database())
+def get_payment_repo():
+    return repo_factory.payment_repo()
 
-def get_plan_repo() -> PlanRepository:
-    return PlanRepository(get_database())
+def get_plan_repo():
+    return repo_factory.plan_repo()
 
 # --- LLM provider & client ---
 

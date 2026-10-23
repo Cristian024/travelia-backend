@@ -14,7 +14,10 @@ class PaymentStatus(str, Enum):
 
 
 class Payment(BaseModel):
+    """Intento/transacción de la pasarela. Pertenece a un `Order` (1→N)."""
+
     id: Optional[str] = Field(default=None, alias="_id")
+    order_id: Optional[str] = None
     user_id: str
     reference: str
     amount_in_cents: int

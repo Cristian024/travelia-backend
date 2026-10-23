@@ -11,6 +11,7 @@ from typing import Optional
 
 from app.models.expense import Expense
 from app.models.itinerary import ItineraryDocument
+from app.models.order import Order, OrderStatus
 from app.models.packing import PackingList
 from app.models.payment import Payment, PaymentStatus
 from app.models.plan import Plan
@@ -167,3 +168,23 @@ class PlanRepositoryPort(ABC):
 
     @abstractmethod
     async def delete(self, plan_id: str) -> bool: ...
+
+
+class OrderRepositoryPort(ABC):
+    @abstractmethod
+    async def insert(self, order: Order) -> str: ...
+
+    @abstractmethod
+    async def find_by_id(self, order_id: str) -> Optional[Order]: ...
+
+    @abstractmethod
+    async def find_by_user(self, user_id: str) -> list[Order]: ...
+
+    @abstractmethod
+    async def update_status(self, order_id: str, status: OrderStatus) -> bool: ...
+
+    @abstractmethod
+    async def list_all(self, limit: int, offset: int) -> list[Order]: ...
+
+    @abstractmethod
+    async def count_all(self) -> int: ...

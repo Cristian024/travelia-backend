@@ -8,6 +8,7 @@ from app.dependencies import (
     get_plan_service,
     get_user_service,
 )
+from app.schemas.order import OrderResponse, PaginatedOrdersResponse
 from app.schemas.payment import PaginatedPaymentsResponse, PaymentResponse
 from app.schemas.plan import CreatePlanRequest, PlanResponse, UpdatePlanRequest
 from app.schemas.user import (
@@ -59,6 +60,28 @@ async def delete_plan(
     service: Annotated[PlanService, Depends(get_plan_service)],
 ) -> None:
     await service.delete_plan(plan_id)
+
+
+# ---------------------------------------------------------------------------
+# Órdenes
+# ---------------------------------------------------------------------------
+@router.get("/orders", response_model=PaginatedOrdersResponse)
+async def list_orders(
+    admin: CurrentAdmin,
+    service: Annotated[PaymentService, Depends(get_payment_service)],
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+) -> PaginatedOrdersResponse:
+    return await service.list_orders(page=page, page_size=page_size)
+
+
+@router.get("/orders/{order_id}", response_model=OrderResponse)
+async def get_order(
+    order_id: str,
+    admin: CurrentAdmin,
+    service: Annotated[PaymentService, Depends(get_payment_service)],
+) -> OrderResponse:
+    return await service.get_order_admin(order_id)
 
 
 # ---------------------------------------------------------------------------

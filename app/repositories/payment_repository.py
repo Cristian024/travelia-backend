@@ -8,7 +8,7 @@ from app.ports.repositories import PaymentRepositoryPort
 from app.repositories.base import BaseRepository, new_id
 
 _COLUMNS = (
-    "id, user_id, reference, amount_in_cents, currency, status,"
+    "id, order_id, user_id, reference, amount_in_cents, currency, status,"
     " transaction_id, created_at, updated_at"
 )
 
@@ -21,11 +21,11 @@ class PaymentRepository(BaseRepository[Payment], PaymentRepositoryPort):
         payment_id = new_id()
         await self._pool.execute(
             """
-            INSERT INTO payments (id, user_id, reference, amount_in_cents, currency,
-                                  status, transaction_id, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            INSERT INTO payments (id, order_id, user_id, reference, amount_in_cents,
+                                  currency, status, transaction_id, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             """,
-            payment_id, payment.user_id, payment.reference,
+            payment_id, payment.order_id, payment.user_id, payment.reference,
             payment.amount_in_cents, payment.currency, payment.status.value,
             payment.transaction_id, payment.created_at, payment.updated_at,
         )
@@ -74,6 +74,7 @@ class PaymentRepository(BaseRepository[Payment], PaymentRepositoryPort):
             """
             CREATE TABLE IF NOT EXISTS payments (
                 id TEXT PRIMARY KEY,
+                order_id TEXT REFERENCES orders(id),
                 user_id TEXT NOT NULL,
                 reference TEXT NOT NULL UNIQUE,
                 amount_in_cents INTEGER NOT NULL,

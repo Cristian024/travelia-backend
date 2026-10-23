@@ -52,6 +52,9 @@ def get_expense_repo():
 def get_packing_repo():
     return repo_factory.packing_repo()
 
+def get_order_repo():
+    return repo_factory.order_repo()
+
 def get_payment_repo():
     return repo_factory.payment_repo()
 
@@ -197,13 +200,14 @@ def get_wompi_params() -> WompiParams:
 
 def get_payment_service(
     user_repo: Annotated[UserRepository, Depends(get_user_repo)],
+    order_repo: Annotated[object, Depends(get_order_repo)],
     payment_repo: Annotated[PaymentRepository, Depends(get_payment_repo)],
     plan_repo: Annotated[PlanRepository, Depends(get_plan_repo)],
     gateway: Annotated[WompiApiClient, Depends(get_payment_gateway)],
     params: Annotated[WompiParams, Depends(get_wompi_params)],
 ) -> PaymentService:
     """Servicio de pagos (checkout, transacción server-side y webhook)."""
-    return PaymentService(user_repo, payment_repo, plan_repo, gateway, params)
+    return PaymentService(user_repo, order_repo, payment_repo, plan_repo, gateway, params)
 
 # --- Auth dependency ---
 

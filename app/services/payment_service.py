@@ -14,14 +14,17 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.core.exceptions import BusinessRuleError, ForbiddenError, NotFoundError, PaymentGatewayError
+from app.models.order import Order, OrderStatus
 from app.models.payment import Payment, PaymentStatus
 from app.models.plan import PlanCode
 from app.ports.external import PaymentGatewayPort
 from app.ports.repositories import (
+    OrderRepositoryPort,
     PaymentRepositoryPort,
     PlanRepositoryPort,
     UserRepositoryPort,
 )
+from app.schemas.order import OrderResponse, PaginatedOrdersResponse
 from app.schemas.payment import (
     CheckoutResponse,
     CreateTransactionRequest,
@@ -58,12 +61,14 @@ class PaymentService:
     def __init__(
         self,
         user_repo: UserRepositoryPort,
+        order_repo: OrderRepositoryPort,
         payment_repo: PaymentRepositoryPort,
         plan_repo: PlanRepositoryPort,
         gateway: PaymentGatewayPort,
         params: WompiParams,
     ) -> None:
         self._user_repo = user_repo
+        self._order_repo = order_repo
         self._payment_repo = payment_repo
         self._plan_repo = plan_repo
         self._gateway = gateway
@@ -96,8 +101,17 @@ class PaymentService:
             raise NotFoundError("User")
         plan = await self._get_premium_plan()
 
+        order = Order(
+            user_id=user_id,
+            plan_code=plan.code,
+            amount_in_cents=plan.amount_in_cents,
+            currency=plan.currency,
+        )
+        order_id = await self._order_repo.insert(order)
+
         reference = str(uuid.uuid4())
         payment = Payment(
+            order_id=order_id,
             user_id=user_id,
             reference=reference,
             amount_in_cents=plan.amount_in_cents,
@@ -105,8 +119,8 @@ class PaymentService:
         )
         payment_id = await self._payment_repo.insert(payment)
         logger.info(
-            "Checkout creado payment=%s ref=%s usuario=%s amount=%s",
-            payment_id, reference, user_id, plan.amount_in_cents,
+            "Checkout creado order=%s payment=%s ref=%s usuario=%s amount=%s",
+            order_id, payment_id, reference, user_id, plan.amount_in_cents,
         )
 
         signature = self.compute_integrity_signature(
@@ -133,8 +147,17 @@ class PaymentService:
             raise NotFoundError("User")
         plan = await self._get_premium_plan()
 
+        order = Order(
+            user_id=user_id,
+            plan_code=plan.code,
+            amount_in_cents=plan.amount_in_cents,
+            currency=plan.currency,
+        )
+        order_id = await self._order_repo.insert(order)
+
         reference = str(uuid.uuid4())
         payment = Payment(
+            order_id=order_id,
             user_id=user_id,
             reference=reference,
             amount_in_cents=plan.amount_in_cents,
@@ -158,10 +181,11 @@ class PaymentService:
         status = _map_status(result.status)
         await self._payment_repo.update_status(reference, status, result.transaction_id)
         if status == PaymentStatus.approved:
+            await self._order_repo.update_status(order_id, OrderStatus.paid)
             await self._user_repo.activate_premium(user_id)
         logger.info(
-            "Transacción server-side ref=%s usuario=%s estado=%s tx=%s",
-            reference, user_id, status.value, result.transaction_id,
+            "Transacción server-side order=%s ref=%s usuario=%s estado=%s tx=%s",
+            order_id, reference, user_id, status.value, result.transaction_id,
         )
 
         return TransactionResponse(
@@ -201,6 +225,25 @@ class PaymentService:
         if not payment:
             raise NotFoundError("Payment")
         return PaymentResponse.from_domain(payment)
+
+    async def list_orders(self, page: int, page_size: int) -> PaginatedOrdersResponse:
+        offset = (page - 1) * page_size
+        orders = await self._order_repo.list_all(limit=page_size, offset=offset)
+        total = await self._order_repo.count_all()
+        total_pages = (total + page_size - 1) // page_size if page_size else 0
+        return PaginatedOrdersResponse(
+            items=[OrderResponse.from_domain(o) for o in orders],
+            page=page,
+            page_size=page_size,
+            total=total,
+            total_pages=total_pages,
+        )
+
+    async def get_order_admin(self, order_id: str) -> OrderResponse:
+        order = await self._order_repo.find_by_id(order_id)
+        if not order:
+            raise NotFoundError("Order")
+        return OrderResponse.from_domain(order)
 
     # ------------------------------------------------------------------
     # Firma de eventos (checksum SHA-256)
@@ -270,6 +313,8 @@ class PaymentService:
             await self._payment_repo.update_status(
                 reference, PaymentStatus.approved, transaction.id
             )
+            if payment.order_id:
+                await self._order_repo.update_status(payment.order_id, OrderStatus.paid)
         logger.info("Wompi webhook: usuario %s actualizado a PREMIUM", user_id)
         return PaymentWebhookResult(
             signature_valid=True, processed=True, detail="premium_activated"

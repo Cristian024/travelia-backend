@@ -52,6 +52,7 @@ class TransactionResponse(BaseModel):
 
 class PaymentResponse(BaseModel):
     id: str
+    order_id: Optional[str] = None
     user_id: str
     reference: str
     amount_in_cents: int
@@ -65,6 +66,7 @@ class PaymentResponse(BaseModel):
     def from_domain(cls, payment: Payment) -> "PaymentResponse":
         return cls(
             id=payment.id,
+            order_id=payment.order_id,
             user_id=payment.user_id,
             reference=payment.reference,
             amount_in_cents=payment.amount_in_cents,

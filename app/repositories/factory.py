@@ -10,11 +10,13 @@ from app.repositories.expense_repository import ExpenseRepository
 from app.repositories.itinerary_repository import ItineraryRepository
 from app.repositories.mongo.expense_repository import MongoExpenseRepository
 from app.repositories.mongo.itinerary_repository import MongoItineraryRepository
+from app.repositories.mongo.order_repository import MongoOrderRepository
 from app.repositories.mongo.packing_repository import MongoPackingListRepository
 from app.repositories.mongo.payment_repository import MongoPaymentRepository
 from app.repositories.mongo.plan_repository import MongoPlanRepository
 from app.repositories.mongo.planning_repository import MongoPlanningRepository
 from app.repositories.mongo.user_repository import MongoUserRepository
+from app.repositories.order_repository import OrderRepository
 from app.repositories.packing_repository import PackingListRepository
 from app.repositories.payment_repository import PaymentRepository
 from app.repositories.plan_repository import PlanRepository
@@ -46,6 +48,10 @@ def packing_repo():
     return MongoPackingListRepository(get_mongo_db()) if _is_mongo() else PackingListRepository(get_database())
 
 
+def order_repo():
+    return MongoOrderRepository(get_mongo_db()) if _is_mongo() else OrderRepository(get_database())
+
+
 def payment_repo():
     return MongoPaymentRepository(get_mongo_db()) if _is_mongo() else PaymentRepository(get_database())
 
@@ -64,6 +70,7 @@ async def ensure_schema() -> None:
         itinerary_repo,
         expense_repo,
         packing_repo,
+        order_repo,
         payment_repo,
     ):
         await factory().create_indexes()

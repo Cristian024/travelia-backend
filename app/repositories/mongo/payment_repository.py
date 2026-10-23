@@ -57,3 +57,4 @@ class MongoPaymentRepository(MongoRepository[Payment], PaymentRepositoryPort):
     async def create_indexes(self) -> None:
         await self._col.create_index("reference", unique=True)
         await self._col.create_index("user_id")
+        await self._col.create_index("order_id")
